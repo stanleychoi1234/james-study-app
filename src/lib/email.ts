@@ -27,11 +27,20 @@ function formatDueDate(dueDate: Date): string {
   });
 }
 
-async function sendMail(to: string, subject: string, html: string) {
+function parseCcEmails(ccEmails?: string | null): string[] {
+  if (!ccEmails) return [];
+  return ccEmails
+    .split(/[,;]/)
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0 && e.includes("@"));
+}
+
+async function sendMail(to: string, subject: string, html: string, cc?: string[]) {
   try {
     await transporter.sendMail({
       from: EMAIL_FROM,
       to,
+      cc: cc && cc.length > 0 ? cc : undefined,
       subject,
       html,
       replyTo: EMAIL_FROM,
@@ -61,6 +70,7 @@ const replyInstructions = `
 
 interface SetupEmailParams {
   to: string;
+  ccEmails?: string | null;
   assignmentTitle: string;
   description: string;
   dueDate: Date;
@@ -70,6 +80,7 @@ interface SetupEmailParams {
 
 export async function sendSetupConfirmationEmail({
   to,
+  ccEmails,
   assignmentTitle,
   description,
   dueDate,
@@ -116,13 +127,14 @@ export async function sendSetupConfirmationEmail({
     </div>
   `;
 
-  return sendMail(to, subject, html);
+  return sendMail(to, subject, html, parseCcEmails(ccEmails));
 }
 
 // --- Enhanced Reminder Email ---
 
 interface ReminderV2Params {
   to: string;
+  ccEmails?: string | null;
   assignmentTitle: string;
   dueDate: Date;
   referenceCode: string;
@@ -132,6 +144,7 @@ interface ReminderV2Params {
 
 export async function sendReminderEmailV2({
   to,
+  ccEmails,
   assignmentTitle,
   dueDate,
   referenceCode,
@@ -179,7 +192,7 @@ export async function sendReminderEmailV2({
     </div>
   `;
 
-  return sendMail(to, subject, html);
+  return sendMail(to, subject, html, parseCcEmails(ccEmails));
 }
 
 // --- Legacy (kept for backward compatibility) ---

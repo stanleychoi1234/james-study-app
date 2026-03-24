@@ -56,6 +56,7 @@ export async function POST() {
         if (msUntilDue <= intervalMs && msUntilDue > Math.max(0, windowEnd)) {
           const emailResult = await sendReminderEmailV2({
             to: assignment.reminderEmail,
+            ccEmails: assignment.ccEmails,
             assignmentTitle: assignment.title,
             dueDate: assignment.dueDate,
             referenceCode: assignment.referenceCode,

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
@@ -12,10 +12,26 @@ const navItems = [
   { href: "/diary", label: "Diary", icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" },
 ];
 
+const adminItem = {
+  href: "/admin",
+  label: "Admin",
+  icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z",
+};
+
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userRole, setUserRole] = useState("");
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.user?.role) setUserRole(d.user.role);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleLogout() {
     document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
@@ -50,6 +66,21 @@ export default function Navbar() {
                   {item.label}
                 </Link>
               ))}
+              {(userRole === "manager" || userRole === "deputy_manager") && (
+                <Link
+                  href={adminItem.href}
+                  className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    pathname === adminItem.href
+                      ? "bg-amber-50 text-amber-700"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                  }`}
+                >
+                  <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={adminItem.icon} />
+                  </svg>
+                  {adminItem.label}
+                </Link>
+              )}
             </div>
           </div>
           <div className="hidden md:flex items-center">
@@ -93,6 +124,22 @@ export default function Navbar() {
                 {item.label}
               </Link>
             ))}
+            {(userRole === "manager" || userRole === "deputy_manager") && (
+              <Link
+                href={adminItem.href}
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${
+                  pathname === adminItem.href
+                    ? "bg-amber-50 text-amber-700"
+                    : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={adminItem.icon} />
+                </svg>
+                {adminItem.label}
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:bg-gray-50"

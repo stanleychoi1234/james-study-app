@@ -12,6 +12,7 @@ model User {
   email        String   @unique
   passwordHash String
   name         String
+  role         String   @default("user")
   timezone     String   @default("UTC")
   createdAt    DateTime @default(now())
 
@@ -33,6 +34,7 @@ model Assignment {
   startedAt        DateTime?
   emailEnabled     Boolean   @default(false)
   reminderEmail    String?
+  ccEmails         String?
   reminderSchedule String    @default("[]")
   referenceCode    String    @unique @default("")
   createdAt        DateTime  @default(now())

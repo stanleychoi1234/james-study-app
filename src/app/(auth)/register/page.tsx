@@ -84,49 +84,42 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4 py-12">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4 py-12 relative overflow-hidden">
+      {/* Background effects */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute top-1/3 left-1/4 w-72 h-72 bg-purple-600/15 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/3 w-72 h-72 bg-cyan-600/15 rounded-full blur-3xl" />
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <svg
-              className="w-6 h-6 text-white"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"
-              />
-            </svg>
-          </div>
-          <span className="text-2xl font-bold text-gray-900">StudyApp</span>
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/30">
+              <span className="text-white font-bold text-lg">S</span>
+            </div>
+            <span className="text-2xl font-bold text-white">StudyApp</span>
+          </Link>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-          <h1 className="text-2xl font-semibold text-gray-900 text-center mb-2">
+        <div className="bg-gray-900/70 backdrop-blur-sm rounded-2xl border border-gray-800 p-8">
+          <h1 className="text-2xl font-semibold text-white text-center mb-2">
             Create your account
           </h1>
-          <p className="text-sm text-gray-500 text-center mb-6">
+          <p className="text-sm text-gray-400 text-center mb-6">
             Get started with your study plan today
           </p>
 
           {error && (
-            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label
-                htmlFor="name"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
+              <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">
                 Full name
               </label>
               <input
@@ -136,16 +129,13 @@ export default function RegisterPage() {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                 placeholder="James Smith"
               />
             </div>
 
             <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
                 Email address
               </label>
               <input
@@ -155,16 +145,13 @@ export default function RegisterPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                 placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
                 Password
               </label>
               <input
@@ -174,19 +161,14 @@ export default function RegisterPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                 placeholder="At least 8 characters"
               />
-              <p className="mt-1 text-xs text-gray-400">
-                Must be at least 8 characters
-              </p>
+              <p className="mt-1 text-xs text-gray-500">Must be at least 8 characters</p>
             </div>
 
             <div>
-              <label
-                htmlFor="timezone"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
+              <label htmlFor="timezone" className="block text-sm font-medium text-gray-300 mb-1">
                 Timezone
               </label>
               <select
@@ -194,15 +176,11 @@ export default function RegisterPage() {
                 required
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-white"
+                className="w-full rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               >
-                <option value="" disabled>
-                  Select your timezone
-                </option>
+                <option value="" disabled>Select your timezone</option>
                 {TIMEZONES.map((tz) => (
-                  <option key={tz.value} value={tz.value}>
-                    {tz.label}
-                  </option>
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
                 ))}
               </select>
             </div>
@@ -210,28 +188,13 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-2.5 text-sm font-semibold text-white hover:from-blue-500 hover:to-cyan-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg shadow-blue-600/25"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg
-                    className="animate-spin h-4 w-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                   Creating account...
                 </span>
@@ -244,10 +207,7 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{" "}
-          <Link
-            href="/login"
-            className="font-semibold text-indigo-600 hover:text-indigo-500 transition"
-          >
+          <Link href="/login" className="font-semibold text-blue-400 hover:text-blue-300 transition">
             Sign in
           </Link>
         </p>

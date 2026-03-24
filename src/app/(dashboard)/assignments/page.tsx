@@ -99,6 +99,7 @@ export default function AssignmentsPage() {
   const [dueTime, setDueTime] = useState("08:00");
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [reminderEmail, setReminderEmail] = useState("");
+  const [ccEmails, setCcEmails] = useState("");
   const [reminderSchedule, setReminderSchedule] = useState<string[]>(DEFAULT_SCHEDULE);
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState("");
@@ -161,6 +162,7 @@ export default function AssignmentsPage() {
           dueDate: dueDateTimeStr,
           emailEnabled,
           reminderEmail: emailEnabled ? reminderEmail : undefined,
+          ccEmails: emailEnabled && ccEmails.trim() ? ccEmails.trim() : undefined,
           reminderSchedule: emailEnabled ? reminderSchedule : undefined,
         }),
       });
@@ -181,6 +183,7 @@ export default function AssignmentsPage() {
       setDueDate("");
       setDueTime("08:00");
       setEmailEnabled(false);
+      setCcEmails("");
       setReminderSchedule(DEFAULT_SCHEDULE);
       setShowForm(false);
     } catch (err) {
@@ -383,6 +386,19 @@ export default function AssignmentsPage() {
                         value={reminderEmail}
                         onChange={(e) => setReminderEmail(e.target.value)}
                         placeholder="your@email.com"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="ccEmails" className="block text-xs font-medium text-gray-600 mb-1">
+                        CC (optional — separate multiple with comma or semicolon)
+                      </label>
+                      <input
+                        id="ccEmails"
+                        type="text"
+                        value={ccEmails}
+                        onChange={(e) => setCcEmails(e.target.value)}
+                        placeholder="teacher@school.edu, parent@email.com"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                       />
                     </div>

@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       dueDate,
       emailEnabled,
       reminderEmail,
+      ccEmails,
       reminderSchedule,
     } = await request.json();
 
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
         dueDate: parsedDate,
         emailEnabled: !!emailEnabled,
         reminderEmail: emailEnabled ? (reminderEmail || user?.email || "") : null,
+        ccEmails: emailEnabled && ccEmails ? ccEmails : null,
         reminderSchedule: JSON.stringify(schedule),
         referenceCode,
       },
@@ -95,6 +97,7 @@ export async function POST(request: Request) {
       try {
         await sendSetupConfirmationEmail({
           to: assignment.reminderEmail,
+          ccEmails: assignment.ccEmails,
           assignmentTitle: title,
           description: description || "",
           dueDate: parsedDate,
