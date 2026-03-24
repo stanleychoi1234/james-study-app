@@ -43,6 +43,8 @@ export async function POST(request: Request) {
       reminderEmail,
       ccEmails,
       reminderSchedule,
+      recurType,
+      recurEndDate,
     } = await request.json();
 
     if (!title || !dueDate) {
@@ -78,6 +80,15 @@ export async function POST(request: Request) {
       select: { email: true },
     });
 
+    // Parse recurEndDate and clamp to max 3 months from now
+    let parsedRecurEnd: Date | null = null;
+    if (recurType && recurEndDate) {
+      parsedRecurEnd = new Date(recurEndDate);
+      const maxEnd = new Date();
+      maxEnd.setMonth(maxEnd.getMonth() + 3);
+      if (parsedRecurEnd > maxEnd) parsedRecurEnd = maxEnd;
+    }
+
     const assignment = await prisma.assignment.create({
       data: {
         userId: authUser.userId,
@@ -89,8 +100,52 @@ export async function POST(request: Request) {
         ccEmails: emailEnabled && ccEmails ? ccEmails : null,
         reminderSchedule: JSON.stringify(schedule),
         referenceCode,
+        recurType: recurType || null,
+        recurEndDate: parsedRecurEnd,
       },
     });
+
+    // Generate recurring instances
+    if (recurType && parsedRecurEnd) {
+      const intervals: Record<string, number> = {
+        daily: 1,
+        weekly: 7,
+        fortnightly: 14,
+        monthly: 0, // special handling
+      };
+      const createdIds: string[] = [assignment.id];
+      let nextDate = new Date(parsedDate);
+
+      while (true) {
+        if (recurType === "monthly") {
+          nextDate = new Date(nextDate);
+          nextDate.setMonth(nextDate.getMonth() + 1);
+        } else {
+          const days = intervals[recurType] || 7;
+          nextDate = new Date(nextDate.getTime() + days * 86400000);
+        }
+        if (nextDate > parsedRecurEnd) break;
+
+        const recRef = generateReferenceCode();
+        await prisma.assignment.create({
+          data: {
+            userId: authUser.userId,
+            title,
+            description: description || "",
+            dueDate: nextDate,
+            emailEnabled: !!emailEnabled,
+            reminderEmail: assignment.reminderEmail,
+            ccEmails: assignment.ccEmails,
+            reminderSchedule: JSON.stringify(schedule),
+            referenceCode: recRef,
+            recurType,
+            recurEndDate: parsedRecurEnd,
+            recurParentId: assignment.id,
+          },
+        });
+        createdIds.push(recRef);
+      }
+    }
 
     // Send setup confirmation email if email enabled (must await in serverless)
     if (emailEnabled && assignment.reminderEmail) {

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StudyApp - Student Productivity",
-  description: "Assignment tracking, Pomodoro timer, habit tracker, and reflective diary",
+  title: "James Study Studio",
+  description: "Track assignments, crush focus sessions, build habits, and reflect on your wins",
 };
 
 export default function RootLayout({

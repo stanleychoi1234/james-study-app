@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { LogoIcon } from "./Logo";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
@@ -43,11 +44,12 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Link href="/dashboard" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">S</span>
+            <Link href="/dashboard" className="flex items-center gap-2">
+              <LogoIcon size={32} />
+              <div className="flex flex-col leading-none">
+                <span className="font-bold text-sm text-gray-900 tracking-tight">James Study</span>
+                <span className="text-[9px] font-semibold text-gray-400 tracking-widest uppercase">Studio</span>
               </div>
-              <span className="font-bold text-xl text-gray-900">StudyApp</span>
             </Link>
             <div className="hidden md:flex ml-10 space-x-1">
               {navItems.map((item) => (

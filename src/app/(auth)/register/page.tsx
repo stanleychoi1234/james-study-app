@@ -3,6 +3,8 @@
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { LogoIcon } from "@/components/Logo";
+import Footer from "@/components/Footer";
 
 const TIMEZONES = [
   { value: "Pacific/Auckland", label: "Auckland (NZST, UTC+12)" },
@@ -94,11 +96,12 @@ export default function RegisterPage() {
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <span className="text-white font-bold text-lg">S</span>
+          <Link href="/" className="flex items-center gap-2.5">
+            <LogoIcon size={40} />
+            <div className="flex flex-col leading-none">
+              <span className="font-bold text-xl text-white tracking-tight">James Study</span>
+              <span className="text-[10px] font-semibold text-gray-400 tracking-widest uppercase">Studio</span>
             </div>
-            <span className="text-2xl font-bold text-white">StudyApp</span>
           </Link>
         </div>
 
@@ -212,6 +215,7 @@ export default function RegisterPage() {
           </Link>
         </p>
       </div>
+      <Footer dark />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
 interface HabitLog {
   id: string;
@@ -308,6 +309,7 @@ export default function HabitsPage() {
           })}
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

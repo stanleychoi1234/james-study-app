@@ -2,6 +2,7 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
 interface Assignment {
   id: string;
@@ -101,6 +102,8 @@ export default function AssignmentsPage() {
   const [reminderEmail, setReminderEmail] = useState("");
   const [ccEmails, setCcEmails] = useState("");
   const [reminderSchedule, setReminderSchedule] = useState<string[]>(DEFAULT_SCHEDULE);
+  const [recurType, setRecurType] = useState("");
+  const [recurEndDate, setRecurEndDate] = useState("");
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -164,6 +167,8 @@ export default function AssignmentsPage() {
           reminderEmail: emailEnabled ? reminderEmail : undefined,
           ccEmails: emailEnabled && ccEmails.trim() ? ccEmails.trim() : undefined,
           reminderSchedule: emailEnabled ? reminderSchedule : undefined,
+          recurType: recurType || undefined,
+          recurEndDate: recurEndDate || undefined,
         }),
       });
 
@@ -185,7 +190,11 @@ export default function AssignmentsPage() {
       setEmailEnabled(false);
       setCcEmails("");
       setReminderSchedule(DEFAULT_SCHEDULE);
+      setRecurType("");
+      setRecurEndDate("");
       setShowForm(false);
+      // Refetch all (recurring creates multiple)
+      if (recurType) fetchAssignments();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -421,6 +430,54 @@ export default function AssignmentsPage() {
                         ))}
                       </div>
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Recurring Section */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Recurring (optional)
+                </label>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {[
+                    { key: "", label: "One-time" },
+                    { key: "daily", label: "Daily" },
+                    { key: "weekly", label: "Weekly" },
+                    { key: "fortnightly", label: "Fortnightly" },
+                    { key: "monthly", label: "Monthly" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setRecurType(opt.key)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+                        recurType === opt.key
+                          ? "bg-blue-100 border-blue-300 text-blue-700"
+                          : "bg-white border-gray-300 text-gray-500 hover:border-gray-400"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {recurType && (
+                  <div>
+                    <label htmlFor="recurEndDate" className="block text-xs font-medium text-gray-600 mb-1">
+                      Repeat until (max 3 months)
+                    </label>
+                    <input
+                      id="recurEndDate"
+                      type="date"
+                      value={recurEndDate}
+                      onChange={(e) => setRecurEndDate(e.target.value)}
+                      min={dueDate || new Date().toISOString().split("T")[0]}
+                      max={(() => { const d = new Date(); d.setMonth(d.getMonth() + 3); return d.toISOString().split("T")[0]; })()}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      This will create multiple assignments with the same title, repeating {recurType} until the end date.
+                    </p>
                   </div>
                 )}
               </div>
@@ -688,6 +745,7 @@ export default function AssignmentsPage() {
           </div>
         )}
       </main>
+      <Footer />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
 interface DiaryEntry {
   id: string;
@@ -484,6 +485,7 @@ export default function DiaryPage() {
           )}
         </div>
       </main>
+      <Footer />
     </div>
   );
 }
