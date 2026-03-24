@@ -90,16 +90,20 @@ export async function POST(request: Request) {
       },
     });
 
-    // Send setup confirmation email if email enabled
+    // Send setup confirmation email if email enabled (must await in serverless)
     if (emailEnabled && assignment.reminderEmail) {
-      sendSetupConfirmationEmail({
-        to: assignment.reminderEmail,
-        assignmentTitle: title,
-        description: description || "",
-        dueDate: parsedDate,
-        referenceCode,
-        reminderSchedule: schedule,
-      }).catch((err) => console.error("Setup email failed:", err));
+      try {
+        await sendSetupConfirmationEmail({
+          to: assignment.reminderEmail,
+          assignmentTitle: title,
+          description: description || "",
+          dueDate: parsedDate,
+          referenceCode,
+          reminderSchedule: schedule,
+        });
+      } catch (err) {
+        console.error("Setup email failed:", err);
+      }
     }
 
     return NextResponse.json({ assignment }, { status: 201 });
