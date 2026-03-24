@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  timezone     String   @default("UTC")
+  createdAt    DateTime @default(now())
+
+  assignments      Assignment[]
+  habits           Habit[]
+  habitLogs        HabitLog[]
+  pomodoroSessions PomodoroSession[]
+  diaryEntries     DiaryEntry[]
+}
+
+model Assignment {
+  id               String    @id @default(uuid())
+  userId           String
+  title            String
+  description      String    @default("")
+  dueDate          DateTime
+  status           String    @default("pending")
+  progress         Int       @default(0)
+  startedAt        DateTime?
+  emailEnabled     Boolean   @default(false)
+  reminderEmail    String?
+  reminderSchedule String    @default("[]")
+  referenceCode    String    @unique @default("")
+  createdAt        DateTime  @default(now())
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pomodoroSessions PomodoroSession[]
+  reminderLogs     ReminderLog[]
+
+  @@index([userId, dueDate])
+}
+
+model ReminderLog {
+  id           String   @id @default(uuid())
+  assignmentId String
+  reminderType String
+  sentAt       DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, reminderType])
+}
+
+model Habit {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  frequency String   @default("daily")
+  createdAt DateTime @default(now())
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs HabitLog[]
+}
+
+model HabitLog {
+  id        String  @id @default(uuid())
+  habitId   String
+  userId    String
+  logDate   String
+  completed Boolean @default(true)
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, logDate])
+}
+
+model PomodoroSession {
+  id              String   @id @default(uuid())
+  userId          String
+  assignmentId    String?
+  startTime       DateTime @default(now())
+  durationMinutes Int
+  type            String   @default("work")
+  createdAt       DateTime @default(now())
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+}
+
+model DiaryEntry {
+  id        String   @id @default(uuid())
+  userId    String
+  entryDate String
+  content   String
+  moodScore Int?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entryDate])
+}
