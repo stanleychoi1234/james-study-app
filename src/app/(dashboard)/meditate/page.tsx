@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { MEDITATION_MUSIC } from "@/lib/ambient-audio";
 
 type BreathPhase = "inhale" | "hold" | "exhale" | "holdOut";
 type SessionState = "idle" | "countdown" | "active" | "finished";
@@ -51,102 +50,132 @@ function formatTime(sec: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+// Build the phase sequence for a pattern (skip phases with 0 duration)
+function buildSequence(p: Pattern): { phase: BreathPhase; dur: number }[] {
+  const all: { phase: BreathPhase; dur: number }[] = [
+    { phase: "inhale", dur: p.inhale },
+    { phase: "hold", dur: p.hold },
+    { phase: "exhale", dur: p.exhale },
+    { phase: "holdOut", dur: p.holdOut },
+  ];
+  return all.filter(s => s.dur > 0);
+}
+
 export default function MeditatePage() {
   const [selectedPattern, setSelectedPattern] = useState(0);
-  const [selectedDuration, setSelectedDuration] = useState(1); // 5 min default
+  const [selectedDuration, setSelectedDuration] = useState(1);
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [countdown, setCountdown] = useState(3);
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  const [breathPhase, setBreathPhase] = useState<BreathPhase>("inhale");
-  const [phaseTime, setPhaseTime] = useState(0); // seconds into current phase
-  const [phaseDuration, setPhaseDuration] = useState(4); // total seconds for current phase
   const [cycleCount, setCycleCount] = useState(0);
 
-  // Audio
+  // Audio guide
   const [audioGuide, setAudioGuide] = useState(true);
-  const [selectedMusic, setSelectedMusic] = useState<number | null>(null);
-  const [musicEnabled, setMusicEnabled] = useState(false);
   const [volume, setVolume] = useState(40);
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const masterGainRef = useRef<GainNode | null>(null);
-  const musicInstanceRef = useRef<{ start: () => void; stop: () => void } | null>(null);
+  // Track active guide oscillator so we can stop it on phase change
+  const guideOscRef = useRef<{ osc: OscillatorNode; gain: GainNode } | null>(null);
 
+  // Use refs for the timer state to avoid stale closures
+  const timeRemainingRef = useRef(0);
+  const phaseIndexRef = useRef(0);
+  const phaseTimeRef = useRef(0);
+  const cycleCountRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // These are for rendering only — updated from the refs each tick
+  const [displayTimeRemaining, setDisplayTimeRemaining] = useState(0);
+  const [displayPhase, setDisplayPhase] = useState<BreathPhase>("inhale");
+  const [displayPhaseTime, setDisplayPhaseTime] = useState(0);
+  const [displayPhaseDuration, setDisplayPhaseDuration] = useState(4);
+  const [displayCycleCount, setDisplayCycleCount] = useState(0);
+
   const pattern = PATTERNS[selectedPattern];
   const totalDuration = DURATIONS[selectedDuration].seconds;
+  const sequence = buildSequence(pattern);
 
-  function getOrCreateAudioCtx() {
+  function getOrCreateAudioCtx(): AudioContext {
     if (!audioCtxRef.current) {
       audioCtxRef.current = new AudioContext();
-      masterGainRef.current = audioCtxRef.current.createGain();
-      masterGainRef.current.gain.value = volume / 100;
-      masterGainRef.current.connect(audioCtxRef.current.destination);
     }
-    return { ctx: audioCtxRef.current, gain: masterGainRef.current! };
+    return audioCtxRef.current;
   }
 
-  // Play a soft tone for phase transitions (audio guide)
-  const playPhaseTone = useCallback((phase: BreathPhase) => {
+  // Continuous audio guide tone that plays for the duration of each phase
+  // Inhale: rising tone (C5 to E5), gradually louder
+  // Hold: steady gentle tone (G4), constant soft volume
+  // Exhale: falling tone (E5 to C5), gradually softer
+  const startGuideTone = useCallback((phase: BreathPhase, duration: number) => {
     if (!audioGuide) return;
-    const { ctx } = getOrCreateAudioCtx();
-    const freq = phase === "inhale" ? 440 : phase === "exhale" ? 330 : 392;
-    const osc = ctx.createOscillator(); osc.type = "sine"; osc.frequency.value = freq;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, ctx.currentTime);
-    g.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.1);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-    osc.connect(g).connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime + 0.6);
+    const ctx = getOrCreateAudioCtx();
+    const vol = volume / 100;
+
+    // Stop previous tone smoothly
+    if (guideOscRef.current) {
+      const prev = guideOscRef.current;
+      prev.gain.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      setTimeout(() => { try { prev.osc.stop(); } catch {} }, 200);
+      guideOscRef.current = null;
+    }
+
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    const gain = ctx.createGain();
+    osc.connect(gain).connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    const maxVol = 0.06 * vol;
+
+    if (phase === "inhale") {
+      // Gentle rising tone, volume fades in
+      osc.frequency.setValueAtTime(262, now); // C4
+      osc.frequency.linearRampToValueAtTime(330, now + duration); // E4
+      gain.gain.setValueAtTime(0.005, now);
+      gain.gain.linearRampToValueAtTime(maxVol, now + duration);
+    } else if (phase === "exhale") {
+      // Gentle falling tone, volume fades out
+      osc.frequency.setValueAtTime(330, now); // E4
+      osc.frequency.linearRampToValueAtTime(262, now + duration); // C4
+      gain.gain.setValueAtTime(maxVol, now);
+      gain.gain.linearRampToValueAtTime(0.005, now + duration);
+    } else {
+      // Hold: steady soft tone
+      osc.frequency.setValueAtTime(196, now); // G3 - lower, calmer
+      gain.gain.setValueAtTime(maxVol * 0.4, now);
+    }
+
+    osc.start(now);
+    osc.stop(now + duration + 0.2);
+    guideOscRef.current = { osc, gain };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audioGuide]);
+  }, [audioGuide, volume]);
 
-  function stopMusic() {
-    if (musicInstanceRef.current) { musicInstanceRef.current.stop(); musicInstanceRef.current = null; }
-  }
-
-  function startMusic() {
-    if (!musicEnabled || selectedMusic === null) return;
-    stopMusic();
-    const { ctx, gain } = getOrCreateAudioCtx();
-    const m = MEDITATION_MUSIC[selectedMusic];
-    const instance = m.create(ctx, gain);
-    instance.start();
-    musicInstanceRef.current = instance;
-  }
-
-  // Update volume
-  useEffect(() => {
-    if (masterGainRef.current) masterGainRef.current.gain.value = volume / 100;
-  }, [volume]);
-
-  // Get the next breath phase
-  function getNextPhase(current: BreathPhase): { phase: BreathPhase; duration: number } {
-    const p = PATTERNS[selectedPattern];
-    const all: { phase: BreathPhase; dur: number }[] = [
-      { phase: "inhale" as BreathPhase, dur: p.inhale },
-      { phase: "hold" as BreathPhase, dur: p.hold },
-      { phase: "exhale" as BreathPhase, dur: p.exhale },
-      { phase: "holdOut" as BreathPhase, dur: p.holdOut },
-    ];
-    const sequence = all.filter(s => s.dur > 0);
-
-    const idx = sequence.findIndex(s => s.phase === current);
-    const next = sequence[(idx + 1) % sequence.length];
-    return { phase: next.phase, duration: next.dur };
-  }
+  const stopGuideTone = useCallback(() => {
+    if (guideOscRef.current) {
+      try { guideOscRef.current.osc.stop(); } catch {}
+      guideOscRef.current = null;
+    }
+  }, []);
 
   // Countdown
   useEffect(() => {
     if (sessionState !== "countdown") return;
     if (countdown <= 0) {
-      setSessionState("active");
-      setTimeRemaining(totalDuration);
-      setBreathPhase("inhale");
-      setPhaseTime(0);
-      setPhaseDuration(pattern.inhale);
+      // Initialize session using refs
+      timeRemainingRef.current = totalDuration;
+      phaseIndexRef.current = 0;
+      phaseTimeRef.current = 0;
+      cycleCountRef.current = 0;
+
+      const firstPhase = sequence[0];
+      setDisplayTimeRemaining(totalDuration);
+      setDisplayPhase(firstPhase.phase);
+      setDisplayPhaseTime(0);
+      setDisplayPhaseDuration(firstPhase.dur);
+      setDisplayCycleCount(0);
       setCycleCount(0);
-      playPhaseTone("inhale");
-      startMusic();
+
+      setSessionState("active");
+      startGuideTone(firstPhase.phase, firstPhase.dur);
       return;
     }
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
@@ -154,56 +183,66 @@ export default function MeditatePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionState, countdown]);
 
-  // Main timer
+  // Main timer - uses refs to avoid stale closures
   useEffect(() => {
     if (sessionState !== "active") return;
 
-    timerRef.current = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          setSessionState("finished");
-          stopMusic();
-          // Play completion sound
-          if (audioCtxRef.current) {
-            const ctx = audioCtxRef.current;
-            [523.25, 659.25, 783.99].forEach((f, i) => {
-              const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = f;
-              const g = ctx.createGain();
-              g.gain.setValueAtTime(0, ctx.currentTime + i*0.2);
-              g.gain.linearRampToValueAtTime(0.1, ctx.currentTime + i*0.2 + 0.05);
-              g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i*0.2 + 1.5);
-              o.connect(g).connect(ctx.destination);
-              o.start(ctx.currentTime + i*0.2); o.stop(ctx.currentTime + i*0.2 + 1.5);
-            });
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
+    const seq = buildSequence(PATTERNS[selectedPattern]);
 
-      setPhaseTime(prev => {
-        const next = prev + 1;
-        setPhaseDuration(dur => {
-          if (next >= dur) {
-            // Advance to next phase
-            setBreathPhase(currentPhase => {
-              const np = getNextPhase(currentPhase);
-              setPhaseDuration(np.duration);
-              playPhaseTone(np.phase);
-              if (np.phase === "inhale") setCycleCount(c => c + 1);
-              return np.phase;
-            });
-            return dur; // will be overwritten above
-          }
-          return dur;
+    timerRef.current = setInterval(() => {
+      // Decrement time remaining
+      timeRemainingRef.current -= 1;
+      if (timeRemainingRef.current <= 0) {
+        setSessionState("finished");
+        stopGuideTone();
+        // Play completion chime
+        const ctx = getOrCreateAudioCtx();
+        [523.25, 659.25, 783.99].forEach((f, i) => {
+          const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = f;
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0, ctx.currentTime + i * 0.2);
+          g.gain.linearRampToValueAtTime(0.1, ctx.currentTime + i * 0.2 + 0.05);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 1.5);
+          o.connect(g).connect(ctx.destination);
+          o.start(ctx.currentTime + i * 0.2); o.stop(ctx.currentTime + i * 0.2 + 1.5);
         });
-        return next >= phaseDuration ? 0 : next;
-      });
+        return;
+      }
+
+      // Advance phase time
+      phaseTimeRef.current += 1;
+      const currentIdx = phaseIndexRef.current;
+      const currentPhaseDur = seq[currentIdx].dur;
+
+      if (phaseTimeRef.current >= currentPhaseDur) {
+        // Move to next phase
+        const nextIdx = (currentIdx + 1) % seq.length;
+        phaseIndexRef.current = nextIdx;
+        phaseTimeRef.current = 0;
+
+        if (nextIdx === 0) {
+          cycleCountRef.current += 1;
+        }
+
+        // Start new guide tone
+        startGuideTone(seq[nextIdx].phase, seq[nextIdx].dur);
+      }
+
+      // Update display state
+      const pi = phaseIndexRef.current;
+      setDisplayTimeRemaining(timeRemainingRef.current);
+      setDisplayPhase(seq[pi].phase);
+      setDisplayPhaseTime(phaseTimeRef.current);
+      setDisplayPhaseDuration(seq[pi].dur);
+      setDisplayCycleCount(cycleCountRef.current);
+      setCycleCount(cycleCountRef.current);
     }, 1000);
 
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionState, phaseDuration]);
+  }, [sessionState, selectedPattern]);
 
   function handleStart() {
     setCountdown(3);
@@ -212,18 +251,18 @@ export default function MeditatePage() {
 
   function handleStop() {
     setSessionState("idle");
-    if (timerRef.current) clearInterval(timerRef.current);
-    stopMusic();
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    stopGuideTone();
   }
 
-  // Visual breath circle - scale based on phase
-  const breathProgress = phaseDuration > 0 ? phaseTime / phaseDuration : 0;
-  let circleScale = 1;
+  // Visual: breathing circle scale
+  const breathProgress = displayPhaseDuration > 0 ? displayPhaseTime / displayPhaseDuration : 0;
+  let circleScale = 0.5;
   if (sessionState === "active") {
-    if (breathPhase === "inhale") circleScale = 0.5 + breathProgress * 0.5; // grow from 50% to 100%
-    else if (breathPhase === "exhale") circleScale = 1 - breathProgress * 0.5; // shrink from 100% to 50%
-    else if (breathPhase === "hold") circleScale = 1; // full
-    else circleScale = 0.5; // hold out - small
+    if (displayPhase === "inhale") circleScale = 0.5 + breathProgress * 0.5;
+    else if (displayPhase === "exhale") circleScale = 1 - breathProgress * 0.5;
+    else if (displayPhase === "hold") circleScale = 1;
+    else circleScale = 0.5; // holdOut
   }
 
   return (
@@ -239,13 +278,11 @@ export default function MeditatePage() {
       <Navbar />
 
       <main className="flex-1 relative">
-        {/* Background gradient that shifts with breath */}
         <div className={`absolute inset-0 bg-gradient-to-b ${
-          sessionState === "active" ? PHASE_COLORS[breathPhase] : "from-indigo-950/50 to-gray-950"
+          sessionState === "active" ? PHASE_COLORS[displayPhase] : "from-indigo-950/50 to-gray-950"
         } transition-all duration-1000`} />
 
         <div className="relative z-10 max-w-xl mx-auto px-4 sm:px-6 py-8">
-          {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-white">Breathe & Meditate</h1>
             <p className="text-sm text-gray-400 mt-1">De-stress, refocus, find your calm</p>
@@ -306,9 +343,7 @@ export default function MeditatePage() {
                   {DURATIONS.map((d, i) => (
                     <button key={d.label} onClick={() => setSelectedDuration(i)}
                       className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                        selectedDuration === i
-                          ? "bg-indigo-600 text-white"
-                          : "bg-white/5 text-gray-400 hover:bg-white/10"
+                        selectedDuration === i ? "bg-indigo-600 text-white" : "bg-white/5 text-gray-400 hover:bg-white/10"
                       }`}>
                       {d.label}
                     </button>
@@ -316,50 +351,43 @@ export default function MeditatePage() {
                 </div>
               </div>
 
-              {/* Audio options */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                {/* Voice guide */}
-                <div className="bg-white/5 rounded-xl border border-white/10 p-4">
-                  <div className="flex items-center justify-between mb-2">
+              {/* Audio guide toggle */}
+              <div className="bg-white/5 rounded-xl border border-white/10 p-4 mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
                     <h3 className="text-sm font-semibold text-white">Audio Guide</h3>
-                    <button onClick={() => setAudioGuide(!audioGuide)}
-                      className={`text-xs px-2 py-1 rounded-full ${audioGuide ? "bg-green-500/20 text-green-400" : "bg-white/10 text-gray-500"}`}>
-                      {audioGuide ? "ON" : "OFF"}
-                    </button>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Continuous tones guide each phase — close your eyes and follow the sound
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-500">Soft tones on phase transitions</p>
+                  <button onClick={() => setAudioGuide(!audioGuide)}
+                    className={`text-xs px-3 py-1.5 rounded-full font-medium ${audioGuide ? "bg-green-500/20 text-green-400" : "bg-white/10 text-gray-500"}`}>
+                    {audioGuide ? "ON" : "OFF"}
+                  </button>
                 </div>
-
-                {/* Music */}
-                <div className="bg-white/5 rounded-xl border border-white/10 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold text-white">Calm Music</h3>
-                    <button onClick={() => setMusicEnabled(!musicEnabled)}
-                      className={`text-xs px-2 py-1 rounded-full ${musicEnabled ? "bg-green-500/20 text-green-400" : "bg-white/10 text-gray-500"}`}>
-                      {musicEnabled ? "ON" : "OFF"}
-                    </button>
+                {audioGuide && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-3 text-xs text-gray-400">
+                      <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" /> Inhale — rising tone, gradually louder
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-400">
+                      <span className="w-2 h-2 rounded-full bg-purple-400 inline-block" /> Hold — soft steady tone
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-400">
+                      <span className="w-2 h-2 rounded-full bg-teal-400 inline-block" /> Exhale — falling tone, gradually softer
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {MEDITATION_MUSIC.map((m, i) => (
-                      <button key={m.name} onClick={() => { setSelectedMusic(i); setMusicEnabled(true); }}
-                        className={`px-2 py-1 text-xs rounded-lg ${
-                          selectedMusic === i ? "bg-white/20 text-white ring-1 ring-white/30" : "bg-white/5 text-gray-400 hover:bg-white/10"
-                        }`}>
-                        {m.emoji} {m.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Volume */}
-              {(audioGuide || musicEnabled) && (
+              {audioGuide && (
                 <div className="flex items-center gap-2 mb-8 px-1">
                   <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6l-4 4H4v4h4l4 4V6z" />
                   </svg>
                   <input type="range" min={0} max={100} value={volume} onChange={(e) => setVolume(Number(e.target.value))}
-                    className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white" />
+                    className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg" />
                   <span className="text-xs text-gray-400 w-8 text-right">{volume}%</span>
                 </div>
               )}
@@ -373,46 +401,34 @@ export default function MeditatePage() {
               </div>
             </>
           ) : sessionState === "active" ? (
-            <>
-              {/* Active breathing session */}
-              <div className="flex flex-col items-center">
-                {/* Time remaining */}
-                <div className="text-sm text-gray-400 mb-2">{formatTime(timeRemaining)} remaining</div>
+            <div className="flex flex-col items-center">
+              <div className="text-sm text-gray-400 mb-2">{formatTime(displayTimeRemaining)} remaining</div>
 
-                {/* Breathing circle */}
-                <div className="relative w-72 h-72 flex items-center justify-center mb-8">
-                  {/* Outer glow */}
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-500/10 to-purple-500/10" />
-
-                  {/* Breathing circle */}
-                  <div
-                    className="rounded-full bg-gradient-to-br from-indigo-500/40 to-cyan-500/40 backdrop-blur-sm border border-white/20 flex items-center justify-center transition-all duration-1000 ease-in-out"
-                    style={{
-                      width: `${circleScale * 100}%`,
-                      height: `${circleScale * 100}%`,
-                    }}
-                  >
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-white">{PHASE_LABELS[breathPhase]}</p>
-                      <p className="text-4xl font-mono font-bold text-white/80 mt-1">
-                        {phaseDuration - phaseTime}
-                      </p>
-                    </div>
+              {/* Breathing circle */}
+              <div className="relative w-72 h-72 flex items-center justify-center mb-8">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-500/10 to-purple-500/10" />
+                <div
+                  className="rounded-full bg-gradient-to-br from-indigo-500/40 to-cyan-500/40 backdrop-blur-sm border border-white/20 flex items-center justify-center transition-all duration-1000 ease-in-out"
+                  style={{ width: `${circleScale * 100}%`, height: `${circleScale * 100}%` }}
+                >
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-white">{PHASE_LABELS[displayPhase]}</p>
+                    <p className="text-4xl font-mono font-bold text-white/80 mt-1">
+                      {displayPhaseDuration - displayPhaseTime}
+                    </p>
                   </div>
                 </div>
-
-                {/* Pattern info */}
-                <p className="text-sm text-gray-400 mb-2">
-                  {pattern.name} · Cycle {cycleCount + 1}
-                </p>
-
-                {/* Stop button */}
-                <button onClick={handleStop}
-                  className="px-8 py-3 border border-white/20 text-gray-300 text-sm font-medium rounded-xl hover:bg-white/10 transition-all">
-                  End Session
-                </button>
               </div>
-            </>
+
+              <p className="text-sm text-gray-400 mb-2">
+                {pattern.name} · Cycle {displayCycleCount + 1}
+              </p>
+
+              <button onClick={handleStop}
+                className="px-8 py-3 border border-white/20 text-gray-300 text-sm font-medium rounded-xl hover:bg-white/10 transition-all">
+                End Session
+              </button>
+            </div>
           ) : null}
         </div>
       </main>
