@@ -11,6 +11,7 @@ type CountdownState = "idle" | "breathing" | "running" | "paused";
 interface Assignment {
   id: string;
   title: string;
+  status: string;
 }
 
 interface TodayStats {
@@ -18,35 +19,20 @@ interface TodayStats {
   sessionsCompleted: number;
 }
 
-// Anime scenes - CSS-only particle animations
+// Scenes with direction support
 const SCENES = [
-  { name: "Snow", emoji: "\u{2744}\u{FE0F}", particle: "\u{2744}", color: "from-slate-900 to-blue-950", count: 30 },
-  { name: "Rain", emoji: "\u{1F327}\u{FE0F}", particle: "|", color: "from-gray-900 to-slate-800", count: 40 },
-  { name: "Cherry", emoji: "\u{1F338}", particle: "\u{1F338}", color: "from-pink-950 to-purple-950", count: 20 },
-  { name: "Stars", emoji: "\u{2B50}", particle: "\u{2728}", color: "from-indigo-950 to-black", count: 25 },
-  { name: "Leaves", emoji: "\u{1F343}", particle: "\u{1F343}", color: "from-green-950 to-emerald-950", count: 20 },
-  { name: "Fire", emoji: "\u{1F525}", particle: "\u{1F525}", color: "from-orange-950 to-red-950", count: 15 },
+  { name: "Snow", emoji: "\u{2744}\u{FE0F}", particle: "\u{2744}\u{FE0F}", color: "from-slate-900 to-blue-950", count: 30, direction: "down" as const },
+  { name: "Rain", emoji: "\u{1F327}\u{FE0F}", particle: "\u{2758}", color: "from-gray-900 to-slate-800", count: 40, direction: "down" as const },
+  { name: "Cherry", emoji: "\u{1F338}", particle: "\u{1F338}", color: "from-pink-950 to-purple-950", count: 20, direction: "down" as const },
+  { name: "Stars", emoji: "\u{2B50}", particle: "\u{2728}", color: "from-indigo-950 to-black", count: 25, direction: "down" as const },
+  { name: "Leaves", emoji: "\u{1F343}", particle: "\u{1F343}", color: "from-green-950 to-emerald-950", count: 20, direction: "down" as const },
+  { name: "Fire", emoji: "\u{1F525}", particle: "\u{1F525}", color: "from-orange-950 to-red-950", count: 18, direction: "up" as const },
 ];
 
 const PHASE_CONFIG: Record<Phase, { label: string; gradient: string; ring: string; textColor: string }> = {
-  focus: {
-    label: "Focus",
-    gradient: "from-red-500 to-orange-500",
-    ring: "ring-red-500/30",
-    textColor: "text-red-400",
-  },
-  shortBreak: {
-    label: "Short Break",
-    gradient: "from-green-500 to-emerald-500",
-    ring: "ring-green-500/30",
-    textColor: "text-green-400",
-  },
-  longBreak: {
-    label: "Long Break",
-    gradient: "from-blue-500 to-cyan-500",
-    ring: "ring-blue-500/30",
-    textColor: "text-blue-400",
-  },
+  focus: { label: "Focus", gradient: "from-red-500 to-orange-500", ring: "ring-red-500/30", textColor: "text-red-400" },
+  shortBreak: { label: "Short Break", gradient: "from-green-500 to-emerald-500", ring: "ring-green-500/30", textColor: "text-green-400" },
+  longBreak: { label: "Long Break", gradient: "from-blue-500 to-cyan-500", ring: "ring-blue-500/30", textColor: "text-blue-400" },
 };
 
 function formatTime(totalSeconds: number): string {
@@ -55,16 +41,54 @@ function formatTime(totalSeconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-// Particle component for background animation
+// Duration input with +/- buttons
+function DurationInput({ id, label, value, onChange, min = 1, max = 120, disabled = false }: {
+  id: string; label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; disabled?: boolean;
+}) {
+  const clamp = (v: number) => Math.max(min, Math.min(max, v));
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-medium text-gray-300 mb-1.5">{label}</label>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onChange(clamp(value - 1))}
+          disabled={disabled || value <= min}
+          className="w-8 h-8 rounded-lg bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-lg font-bold transition-colors"
+        >-</button>
+        <input
+          id={id}
+          type="number"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange(clamp(Number(e.target.value) || min))}
+          disabled={disabled}
+          className="w-14 px-1 py-1.5 bg-white/10 border border-white/20 rounded-lg text-sm text-white text-center focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        <button
+          type="button"
+          onClick={() => onChange(clamp(value + 1))}
+          disabled={disabled || value >= max}
+          className="w-8 h-8 rounded-lg bg-white/10 text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-lg font-bold transition-colors"
+        >+</button>
+      </div>
+    </div>
+  );
+}
+
+// Particle component supporting up/down directions
 function Particles({ scene, visible }: { scene: typeof SCENES[number]; visible: boolean }) {
   if (!visible) return null;
+  const isUp = scene.direction === "up";
 
   const particles = Array.from({ length: scene.count }, (_, i) => {
     const left = Math.random() * 100;
     const delay = Math.random() * 8;
-    const duration = 4 + Math.random() * 6;
+    const duration = 3 + Math.random() * 5;
     const size = 10 + Math.random() * 16;
-    const drift = (Math.random() - 0.5) * 40;
+    const drift = (Math.random() - 0.5) * 50;
+    const anim = isUp ? "particleRise" : "particleFall";
 
     return (
       <span
@@ -72,9 +96,9 @@ function Particles({ scene, visible }: { scene: typeof SCENES[number]; visible: 
         className="absolute opacity-0 pointer-events-none select-none"
         style={{
           left: `${left}%`,
-          top: "-5%",
+          [isUp ? "bottom" : "top"]: "-5%",
           fontSize: `${size}px`,
-          animation: `particleFall ${duration}s ${delay}s linear infinite`,
+          animation: `${anim} ${duration}s ${delay}s linear infinite`,
           "--drift": `${drift}px`,
         } as React.CSSProperties}
       >
@@ -87,37 +111,32 @@ function Particles({ scene, visible }: { scene: typeof SCENES[number]; visible: 
 }
 
 export default function PomodoroPage() {
-  // Settings
   const [focusDuration, setFocusDuration] = useState(25);
   const [shortBreakDuration, setShortBreakDuration] = useState(5);
   const [longBreakDuration, setLongBreakDuration] = useState(15);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Timer state
   const [phase, setPhase] = useState<Phase>("focus");
   const [secondsLeft, setSecondsLeft] = useState(25 * 60);
   const [countdownState, setCountdownState] = useState<CountdownState>("idle");
   const [breathCount, setBreathCount] = useState(3);
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
 
-  // Timestamp-delta tracking
   const endTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Assignment linking
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>("");
-
-  // Today's stats
   const [todayStats, setTodayStats] = useState<TodayStats>({ totalFocusMinutes: 0, sessionsCompleted: 0 });
 
-  // Ambient sound
+  // Audio
   const [selectedSound, setSelectedSound] = useState<number | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [volume, setVolume] = useState(50);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
   const soundInstanceRef = useRef<{ start: () => void; stop: () => void } | null>(null);
 
-  // Scene animation
   const [selectedScene, setSelectedScene] = useState(0);
   const [sceneEnabled, setSceneEnabled] = useState(true);
 
@@ -137,15 +156,19 @@ export default function PomodoroPage() {
   const totalDurationSeconds = getDuration(phase) * 60;
   const progress = totalDurationSeconds > 0 ? 1 - secondsLeft / totalDurationSeconds : 0;
 
-  // Fetch assignments
+  // Fetch assignments (include in_progress too since they may not be started)
   useEffect(() => {
-    fetch("/api/assignments?status=pending")
+    fetch("/api/assignments")
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) setAssignments(d.assignments || []); })
+      .then((d) => {
+        if (d) {
+          const pending = (d.assignments || []).filter((a: Assignment) => a.status !== "completed");
+          setAssignments(pending);
+        }
+      })
       .catch(() => {});
   }, []);
 
-  // Log session
   async function logSession(durationMinutes: number) {
     try {
       await fetch("/api/pomodoro/log", {
@@ -156,7 +179,35 @@ export default function PomodoroPage() {
     } catch {}
   }
 
-  // Stop ambient sound
+  // Auto-start linked assignment
+  async function autoStartAssignment() {
+    if (!selectedAssignmentId) return;
+    const assignment = assignments.find((a) => a.id === selectedAssignmentId);
+    if (assignment && assignment.status === "pending") {
+      try {
+        await fetch(`/api/assignments/${selectedAssignmentId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "start" }),
+        });
+        // Update local state
+        setAssignments((prev) =>
+          prev.map((a) => a.id === selectedAssignmentId ? { ...a, status: "in_progress" } : a)
+        );
+      } catch {}
+    }
+  }
+
+  function getOrCreateAudioCtx(): { ctx: AudioContext; gain: GainNode } {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new AudioContext();
+      masterGainRef.current = audioCtxRef.current.createGain();
+      masterGainRef.current.gain.value = volume / 100;
+      masterGainRef.current.connect(audioCtxRef.current.destination);
+    }
+    return { ctx: audioCtxRef.current, gain: masterGainRef.current! };
+  }
+
   function stopAmbientSound() {
     if (soundInstanceRef.current) {
       soundInstanceRef.current.stop();
@@ -164,18 +215,23 @@ export default function PomodoroPage() {
     }
   }
 
-  // Start ambient sound
   function startAmbientSound() {
     if (!soundEnabled || selectedSound === null) return;
     stopAmbientSound();
-    if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+    const { ctx, gain } = getOrCreateAudioCtx();
     const sound = AMBIENT_SOUNDS[selectedSound];
-    const instance = sound.create(audioCtxRef.current);
+    const instance = sound.create(ctx, gain);
     instance.start();
     soundInstanceRef.current = instance;
   }
 
-  // Handle timer completion
+  // Update volume in real-time
+  useEffect(() => {
+    if (masterGainRef.current) {
+      masterGainRef.current.gain.value = volume / 100;
+    }
+  }, [volume]);
+
   const handleTimerComplete = useCallback(async () => {
     stopAmbientSound();
     if (audioCtxRef.current) playCompletionChime(audioCtxRef.current);
@@ -203,45 +259,31 @@ export default function PomodoroPage() {
 
     setCountdownState("idle");
     endTimeRef.current = null;
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, sessionsCompleted, focusDuration, shortBreakDuration, longBreakDuration, selectedAssignmentId]);
 
-  // Core tick
   useEffect(() => {
     if (countdownState !== "running") return;
-    if (endTimeRef.current === null) {
-      endTimeRef.current = Date.now() + secondsLeft * 1000;
-    }
+    if (endTimeRef.current === null) endTimeRef.current = Date.now() + secondsLeft * 1000;
 
     intervalRef.current = setInterval(() => {
       const remaining = Math.round((endTimeRef.current! - Date.now()) / 1000);
-      if (remaining <= 0) {
-        setSecondsLeft(0);
-        handleTimerComplete();
-      } else {
-        setSecondsLeft(remaining);
-      }
+      if (remaining <= 0) { setSecondsLeft(0); handleTimerComplete(); }
+      else setSecondsLeft(remaining);
     }, 250);
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
+    return () => { if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; } };
   }, [countdownState, handleTimerComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Breathing countdown (3, 2, 1)
+  // Breathing countdown
   useEffect(() => {
     if (countdownState !== "breathing") return;
     if (breathCount <= 0) {
       setCountdownState("running");
       endTimeRef.current = Date.now() + secondsLeft * 1000;
       startAmbientSound();
+      autoStartAssignment();
       return;
     }
     const timer = setTimeout(() => setBreathCount((c) => c - 1), 1000);
@@ -257,10 +299,7 @@ export default function PomodoroPage() {
   function handlePause() {
     setCountdownState("paused");
     endTimeRef.current = null;
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     stopAmbientSound();
   }
 
@@ -273,10 +312,7 @@ export default function PomodoroPage() {
   function handleReset() {
     setCountdownState("idle");
     endTimeRef.current = null;
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     setSecondsLeft(getDuration(phase) * 60);
     stopAmbientSound();
   }
@@ -289,22 +325,17 @@ export default function PomodoroPage() {
     endTimeRef.current = null;
   }
 
-  // Update timer when durations change
   useEffect(() => {
     if (countdownState === "idle") setSecondsLeft(getDuration(phase) * 60);
   }, [focusDuration, shortBreakDuration, longBreakDuration, phase, countdownState, getDuration]);
 
-  // Sound toggle
   useEffect(() => {
     if (!soundEnabled) stopAmbientSound();
     else if (isRunning) startAmbientSound();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soundEnabled, selectedSound]);
 
-  // Randomize scene on mount
-  useEffect(() => {
-    setSelectedScene(Math.floor(Math.random() * SCENES.length));
-  }, []);
+  useEffect(() => { setSelectedScene(Math.floor(Math.random() * SCENES.length)); }, []);
 
   const config = PHASE_CONFIG[phase];
   const radius = 120;
@@ -321,6 +352,12 @@ export default function PomodoroPage() {
           90% { opacity: 0.5; }
           100% { opacity: 0; transform: translateY(100vh) translateX(var(--drift, 0)); }
         }
+        @keyframes particleRise {
+          0% { opacity: 0; transform: translateY(0) translateX(0) scale(0.5); }
+          15% { opacity: 0.8; }
+          70% { opacity: 0.6; }
+          100% { opacity: 0; transform: translateY(-100vh) translateX(var(--drift, 0)) scale(1.3); }
+        }
         @keyframes breathe {
           0%, 100% { transform: scale(1); opacity: 0.7; }
           50% { transform: scale(1.15); opacity: 1; }
@@ -330,16 +367,11 @@ export default function PomodoroPage() {
           50% { opacity: 1; }
           100% { transform: scale(1); opacity: 0; }
         }
-        @keyframes pulse-ring {
-          0% { transform: scale(0.8); opacity: 0.8; }
-          100% { transform: scale(1.3); opacity: 0; }
-        }
       `}</style>
 
       <Navbar />
 
       <main className="flex-1 relative">
-        {/* Background scene */}
         <div className={`absolute inset-0 bg-gradient-to-b ${currentScene.color} transition-colors duration-1000`}>
           <Particles scene={currentScene} visible={sceneEnabled && countdownState !== "idle"} />
         </div>
@@ -353,7 +385,7 @@ export default function PomodoroPage() {
             </div>
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              className={`p-2 rounded-lg transition-colors ${showSettings ? "bg-white/20 text-white" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -362,30 +394,14 @@ export default function PomodoroPage() {
             </button>
           </div>
 
-          {/* Settings */}
+          {/* Settings Panel */}
           {showSettings && (
-            <div className="bg-white/10 backdrop-blur-md rounded-xl border border-white/10 p-6 mb-6">
-              <h2 className="text-lg font-semibold text-white mb-4">Timer Settings</h2>
-              <div className="grid grid-cols-3 gap-4">
-                {[
-                  { id: "focus-dur", label: "Focus (min)", value: focusDuration, set: setFocusDuration, max: 120 },
-                  { id: "short-dur", label: "Short Break", value: shortBreakDuration, set: setShortBreakDuration, max: 60 },
-                  { id: "long-dur", label: "Long Break", value: longBreakDuration, set: setLongBreakDuration, max: 60 },
-                ].map((s) => (
-                  <div key={s.id}>
-                    <label htmlFor={s.id} className="block text-sm font-medium text-gray-300 mb-1">{s.label}</label>
-                    <input
-                      id={s.id}
-                      type="number"
-                      min={1}
-                      max={s.max}
-                      value={s.value}
-                      onChange={(e) => s.set(Math.max(1, Math.min(s.max, Number(e.target.value) || 1)))}
-                      disabled={isRunning}
-                      className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-sm text-white text-center focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
-                    />
-                  </div>
-                ))}
+            <div className="bg-white/10 backdrop-blur-md rounded-xl border border-white/10 p-5 mb-6">
+              <h2 className="text-sm font-semibold text-white mb-3">Timer Settings</h2>
+              <div className="flex items-end justify-center gap-6">
+                <DurationInput id="focus-dur" label="Focus (min)" value={focusDuration} onChange={setFocusDuration} max={120} disabled={isRunning} />
+                <DurationInput id="short-dur" label="Short Break" value={shortBreakDuration} onChange={setShortBreakDuration} max={60} disabled={isRunning} />
+                <DurationInput id="long-dur" label="Long Break" value={longBreakDuration} onChange={setLongBreakDuration} max={60} disabled={isRunning} />
               </div>
             </div>
           )}
@@ -398,9 +414,7 @@ export default function PomodoroPage() {
                 onClick={() => switchPhase(p)}
                 disabled={isRunning || countdownState === "breathing"}
                 className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all disabled:cursor-not-allowed ${
-                  phase === p
-                    ? `bg-gradient-to-r ${PHASE_CONFIG[p].gradient} text-white shadow-lg`
-                    : "text-gray-400 hover:text-white"
+                  phase === p ? `bg-gradient-to-r ${PHASE_CONFIG[p].gradient} text-white shadow-lg` : "text-gray-400 hover:text-white"
                 }`}
               >
                 {PHASE_CONFIG[p].label}
@@ -408,45 +422,24 @@ export default function PomodoroPage() {
             ))}
           </div>
 
-          {/* Timer Display */}
+          {/* Timer */}
           <div className="flex flex-col items-center mb-8">
-            {/* Breathing countdown overlay */}
             {countdownState === "breathing" && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                <div
-                  key={breathCount}
-                  className="text-9xl font-bold text-white"
-                  style={{ animation: "countIn 1s ease-out forwards" }}
-                >
+                <div key={breathCount} className="text-9xl font-bold text-white" style={{ animation: "countIn 1s ease-out forwards" }}>
                   {breathCount > 0 ? breathCount : "GO"}
                 </div>
               </div>
             )}
 
-            {/* Circular Timer */}
             <div className="relative w-72 h-72 mb-8">
-              {/* Pulsing ring behind timer when running */}
               {isRunning && (
-                <div
-                  className={`absolute inset-0 rounded-full ring-4 ${config.ring}`}
-                  style={{ animation: "breathe 4s ease-in-out infinite" }}
-                />
+                <div className={`absolute inset-0 rounded-full ring-4 ${config.ring}`} style={{ animation: "breathe 4s ease-in-out infinite" }} />
               )}
-
               <svg className="w-full h-full -rotate-90 drop-shadow-2xl" viewBox="0 0 280 280">
                 <circle cx="140" cy="140" r={radius} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
-                <circle
-                  cx="140"
-                  cy="140"
-                  r={radius}
-                  fill="none"
-                  stroke="url(#timer-gradient)"
-                  strokeWidth="8"
-                  strokeLinecap="round"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={strokeDashoffset}
-                  className="transition-[stroke-dashoffset] duration-300"
-                />
+                <circle cx="140" cy="140" r={radius} fill="none" stroke="url(#timer-gradient)" strokeWidth="8" strokeLinecap="round"
+                  strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} className="transition-[stroke-dashoffset] duration-300" />
                 <defs>
                   <linearGradient id="timer-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor={phase === "focus" ? "#ef4444" : phase === "shortBreak" ? "#22c55e" : "#3b82f6"} />
@@ -454,11 +447,8 @@ export default function PomodoroPage() {
                   </linearGradient>
                 </defs>
               </svg>
-
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-6xl font-mono font-bold text-white tracking-wider drop-shadow-lg">
-                  {formatTime(secondsLeft)}
-                </span>
+                <span className="text-6xl font-mono font-bold text-white tracking-wider drop-shadow-lg">{formatTime(secondsLeft)}</span>
                 <span className={`text-sm font-medium mt-2 ${config.textColor}`}>{config.label}</span>
               </div>
             </div>
@@ -466,32 +456,20 @@ export default function PomodoroPage() {
             {/* Controls */}
             <div className="flex items-center gap-3">
               {countdownState === "idle" ? (
-                <button
-                  onClick={handleStart}
-                  className={`px-10 py-3.5 bg-gradient-to-r ${config.gradient} text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105`}
-                >
+                <button onClick={handleStart} className={`px-10 py-3.5 bg-gradient-to-r ${config.gradient} text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105`}>
                   Start
                 </button>
               ) : countdownState === "running" ? (
-                <button
-                  onClick={handlePause}
-                  className="px-10 py-3.5 bg-white/20 backdrop-blur-sm text-white text-sm font-bold rounded-xl hover:bg-white/30 transition-all"
-                >
+                <button onClick={handlePause} className="px-10 py-3.5 bg-white/20 backdrop-blur-sm text-white text-sm font-bold rounded-xl hover:bg-white/30 transition-all">
                   Pause
                 </button>
               ) : countdownState === "paused" ? (
-                <button
-                  onClick={handleResume}
-                  className={`px-10 py-3.5 bg-gradient-to-r ${config.gradient} text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105`}
-                >
+                <button onClick={handleResume} className={`px-10 py-3.5 bg-gradient-to-r ${config.gradient} text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105`}>
                   Resume
                 </button>
               ) : null}
               {countdownState !== "idle" && countdownState !== "breathing" && (
-                <button
-                  onClick={handleReset}
-                  className="px-6 py-3.5 border border-white/20 text-gray-300 text-sm font-medium rounded-xl hover:bg-white/10 transition-all"
-                >
+                <button onClick={handleReset} className="px-6 py-3.5 border border-white/20 text-gray-300 text-sm font-medium rounded-xl hover:bg-white/10 transition-all">
                   Reset
                 </button>
               )}
@@ -501,80 +479,66 @@ export default function PomodoroPage() {
           {/* Session dots */}
           <div className="flex justify-center gap-2 mb-8">
             {[0, 1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className={`w-3 h-3 rounded-full transition-all ${
-                  i < sessionsCompleted % 4
-                    ? `bg-gradient-to-r ${config.gradient} shadow-lg`
-                    : "bg-white/10"
-                }`}
-              />
+              <div key={i} className={`w-3 h-3 rounded-full transition-all ${i < sessionsCompleted % 4 ? `bg-gradient-to-r ${config.gradient} shadow-lg` : "bg-white/10"}`} />
             ))}
-            <span className="text-xs text-gray-500 ml-2">
-              {sessionsCompleted % 4}/4 to long break
-            </span>
+            <span className="text-xs text-gray-500 ml-2">{sessionsCompleted % 4}/4 to long break</span>
           </div>
 
-          {/* Ambient + Scene Controls */}
+          {/* Scene + Sound Controls */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            {/* Scene selector */}
+            {/* Scene */}
             <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-white">Visual Scene</h3>
-                <button
-                  onClick={() => setSceneEnabled(!sceneEnabled)}
-                  className={`text-xs px-2 py-1 rounded-full ${
-                    sceneEnabled ? "bg-green-500/20 text-green-400" : "bg-white/10 text-gray-500"
-                  }`}
-                >
+                <button onClick={() => setSceneEnabled(!sceneEnabled)}
+                  className={`text-xs px-2 py-1 rounded-full ${sceneEnabled ? "bg-green-500/20 text-green-400" : "bg-white/10 text-gray-500"}`}>
                   {sceneEnabled ? "ON" : "OFF"}
                 </button>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {SCENES.map((s, i) => (
-                  <button
-                    key={s.name}
-                    onClick={() => setSelectedScene(i)}
-                    className={`px-2.5 py-1.5 text-xs rounded-lg transition-all ${
-                      selectedScene === i
-                        ? "bg-white/20 text-white ring-1 ring-white/30"
-                        : "bg-white/5 text-gray-400 hover:bg-white/10"
-                    }`}
-                  >
+                  <button key={s.name} onClick={() => setSelectedScene(i)}
+                    className={`px-2.5 py-1.5 text-xs rounded-lg transition-all ${selectedScene === i ? "bg-white/20 text-white ring-1 ring-white/30" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}>
                     {s.emoji} {s.name}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Sound selector */}
+            {/* Sound */}
             <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-white">Ambient Sound</h3>
-                <button
-                  onClick={() => setSoundEnabled(!soundEnabled)}
-                  className={`text-xs px-2 py-1 rounded-full ${
-                    soundEnabled ? "bg-green-500/20 text-green-400" : "bg-white/10 text-gray-500"
-                  }`}
-                >
+                <button onClick={() => setSoundEnabled(!soundEnabled)}
+                  className={`text-xs px-2 py-1 rounded-full ${soundEnabled ? "bg-green-500/20 text-green-400" : "bg-white/10 text-gray-500"}`}>
                   {soundEnabled ? "ON" : "OFF"}
                 </button>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 mb-3">
                 {AMBIENT_SOUNDS.map((s, i) => (
-                  <button
-                    key={s.name}
-                    onClick={() => setSelectedSound(i)}
-                    className={`px-2.5 py-1.5 text-xs rounded-lg transition-all ${
-                      selectedSound === i
-                        ? "bg-white/20 text-white ring-1 ring-white/30"
-                        : "bg-white/5 text-gray-400 hover:bg-white/10"
-                    }`}
-                  >
+                  <button key={s.name} onClick={() => { setSelectedSound(i); if (!soundEnabled) setSoundEnabled(true); }}
+                    className={`px-2.5 py-1.5 text-xs rounded-lg transition-all ${selectedSound === i ? "bg-white/20 text-white ring-1 ring-white/30" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}>
                     {s.emoji} {s.name}
                   </button>
                 ))}
               </div>
+              {/* Volume slider */}
+              {soundEnabled && (
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6l-4 4H4v4h4l4 4V6z" />
+                  </svg>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={volume}
+                    onChange={(e) => setVolume(Number(e.target.value))}
+                    className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg"
+                  />
+                  <span className="text-xs text-gray-400 w-8 text-right">{volume}%</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -584,17 +548,18 @@ export default function PomodoroPage() {
               <label htmlFor="assignment-link" className="block text-sm font-semibold text-white mb-2">
                 Link to Assignment
               </label>
-              <select
-                id="assignment-link"
-                value={selectedAssignmentId}
-                onChange={(e) => setSelectedAssignmentId(e.target.value)}
-                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-              >
+              <select id="assignment-link" value={selectedAssignmentId} onChange={(e) => setSelectedAssignmentId(e.target.value)}
+                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none">
                 <option value="" className="bg-gray-900">No assignment (free focus)</option>
                 {assignments.map((a) => (
-                  <option key={a.id} value={a.id} className="bg-gray-900">{a.title}</option>
+                  <option key={a.id} value={a.id} className="bg-gray-900">
+                    {a.title} {a.status === "pending" ? "(will auto-start)" : ""}
+                  </option>
                 ))}
               </select>
+              {selectedAssignmentId && assignments.find((a) => a.id === selectedAssignmentId)?.status === "pending" && (
+                <p className="text-xs text-cyan-400 mt-1.5">This assignment will automatically start when the timer begins.</p>
+              )}
             </div>
           )}
 
