@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 
 type BreathPhase = "inhale" | "hold" | "exhale" | "holdOut";
 type SessionState = "idle" | "countdown" | "active" | "finished";
@@ -432,7 +431,6 @@ export default function MeditatePage() {
           ) : null}
         </div>
       </main>
-      <Footer dark />
     </div>
   );
 }

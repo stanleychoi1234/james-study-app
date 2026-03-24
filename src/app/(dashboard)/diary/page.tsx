@@ -2,29 +2,47 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 
 interface DiaryEntry {
   id: string;
   entryDate: string;
   content: string;
   moodScore: number | null;
+  weather: string | null;
   createdAt: string;
-  updatedAt: string;
 }
 
 const MOOD_EMOJIS: Record<number, string> = {
-  1: "\u{1F629}",
-  2: "\u{1F61E}",
-  3: "\u{1F615}",
-  4: "\u{1F610}",
-  5: "\u{1F642}",
-  6: "\u{1F60A}",
-  7: "\u{1F604}",
-  8: "\u{1F60D}",
-  9: "\u{1F929}",
-  10: "\u{1F31F}",
+  1: "\u{1F629}", 2: "\u{1F61E}", 3: "\u{1F615}", 4: "\u{1F610}",
+  5: "\u{1F642}", 6: "\u{1F60A}", 7: "\u{1F604}", 8: "\u{1F60D}",
+  9: "\u{1F929}", 10: "\u{1F31F}",
 };
+
+const WEATHER_OPTIONS = [
+  { key: "sunny", emoji: "\u{2600}\u{FE0F}", label: "Sunny" },
+  { key: "cloudy", emoji: "\u{2601}\u{FE0F}", label: "Cloudy" },
+  { key: "rainy", emoji: "\u{1F327}\u{FE0F}", label: "Rainy" },
+  { key: "stormy", emoji: "\u{26C8}\u{FE0F}", label: "Stormy" },
+  { key: "windy", emoji: "\u{1F32C}\u{FE0F}", label: "Windy" },
+  { key: "snowy", emoji: "\u{2744}\u{FE0F}", label: "Snowy" },
+  { key: "hot", emoji: "\u{1F525}", label: "Hot" },
+  { key: "cold", emoji: "\u{1F976}", label: "Cold" },
+];
+
+function getWeatherEmoji(key: string | null): string {
+  if (!key) return "";
+  return WEATHER_OPTIONS.find((w) => w.key === key)?.emoji || "";
+}
+
+// Mood-based background gradient
+function getMoodBg(score: number | null): string {
+  if (!score) return "from-gray-50 to-white";
+  if (score <= 2) return "from-red-50 via-orange-50 to-white";
+  if (score <= 4) return "from-orange-50 via-amber-50 to-white";
+  if (score <= 6) return "from-amber-50 via-yellow-50 to-white";
+  if (score <= 8) return "from-lime-50 via-green-50 to-white";
+  return "from-green-50 via-emerald-50 to-white";
+}
 
 function getMoodColor(score: number): string {
   if (score <= 2) return "bg-red-400";
@@ -42,174 +60,112 @@ function getMoodBadgeStyle(score: number): string {
   return "bg-green-100 text-green-700 border-green-200";
 }
 
+function getMoodAccent(score: number | null): string {
+  if (!score) return "border-amber-200";
+  if (score <= 2) return "border-red-200";
+  if (score <= 4) return "border-orange-200";
+  if (score <= 6) return "border-amber-200";
+  if (score <= 8) return "border-lime-200";
+  return "border-green-200";
+}
+
 function formatDateDisplay(dateStr: string): string {
   const [year, month, day] = dateStr.split("-").map(Number);
   const date = new Date(year, month - 1, day);
   return date.toLocaleDateString("en-AU", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
-}
-
-function getTodayString(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 export default function DiaryPage() {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [content, setContent] = useState("");
   const [moodScore, setMoodScore] = useState<number | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [weather, setWeather] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+  const [isEditMode, setIsEditMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const today = getTodayString();
+  const today = new Date().toISOString().split("T")[0];
 
   const fetchEntries = useCallback(async (search?: string) => {
-    setLoading(true);
     try {
-      const url = search
-        ? `/api/diary?search=${encodeURIComponent(search)}`
-        : "/api/diary";
+      const url = search ? `/api/diary?search=${encodeURIComponent(search)}` : "/api/diary";
       const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to load entries");
+      if (!res.ok) throw new Error("Failed to load");
       const data = await res.json();
       setEntries(data.entries || []);
+    } catch { setError("Failed to load diary entries"); }
+    finally { setLoading(false); }
+  }, []);
 
-      // Check if today's entry already exists
-      const todayEntry = (data.entries || []).find(
-        (e: DiaryEntry) => e.entryDate === today
-      );
-      if (todayEntry) {
-        setContent(todayEntry.content);
-        setMoodScore(todayEntry.moodScore);
-        setIsEditMode(true);
-      }
-    } catch {
-      setError("Could not load diary entries.");
-    } finally {
-      setLoading(false);
-    }
-  }, [today]);
+  useEffect(() => { fetchEntries(); }, [fetchEntries]);
 
+  // Load today's entry if exists
   useEffect(() => {
-    fetchEntries();
-  }, [fetchEntries]);
-
-  function handleSearch() {
-    fetchEntries(searchQuery || undefined);
-  }
-
-  function clearSearch() {
-    setSearchQuery("");
-    fetchEntries();
-  }
+    const todayEntry = entries.find((e) => e.entryDate === today);
+    if (todayEntry) {
+      setContent(todayEntry.content);
+      setMoodScore(todayEntry.moodScore);
+      setWeather(todayEntry.weather);
+      setIsEditMode(true);
+    }
+  }, [entries, today]);
 
   async function handleSave() {
-    if (!content.trim()) {
-      setError("Please write something before saving.");
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-    setSuccessMsg(null);
-
+    if (!content.trim()) return;
+    setSaving(true); setError(""); setSuccessMsg("");
     try {
       const method = isEditMode ? "PUT" : "POST";
       const res = await fetch("/api/diary", {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entryDate: today,
-          content: content.trim(),
-          moodScore,
-        }),
+        body: JSON.stringify({ entryDate: today, content: content.trim(), moodScore, weather }),
       });
-
-      if (res.status === 409) {
-        // Entry already exists for today, switch to edit mode
-        setIsEditMode(true);
-        setError("An entry already exists for today. Switched to edit mode -- press Save again to update.");
-        setSaving(false);
-        return;
-      }
-
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || "Failed to save");
+        const data = await res.json();
+        throw new Error(data.error || "Failed to save");
       }
-
       setSuccessMsg(isEditMode ? "Entry updated!" : "Entry saved!");
       setIsEditMode(true);
-      fetchEntries(searchQuery || undefined);
-
-      setTimeout(() => setSuccessMsg(null), 3000);
+      await fetchEntries();
+      setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save entry.");
-    } finally {
-      setSaving(false);
-    }
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally { setSaving(false); }
   }
 
+  function handleSearch() { fetchEntries(searchQuery.trim() || undefined); }
+  function clearSearch() { setSearchQuery(""); fetchEntries(); }
   function toggleExpanded(id: string) {
     setExpandedEntries((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   }
 
-  // Past entries: everything except today
   const pastEntries = entries.filter((e) => e.entryDate !== today);
-
-  // Mood trend: last 7 entries that have mood scores
-  const moodTrendEntries = entries
-    .filter((e) => e.moodScore !== null)
-    .slice(0, 7)
-    .reverse();
+  const moodTrendEntries = entries.filter((e) => e.moodScore).slice(0, 10).reverse();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-50">
+    <div className={`min-h-screen bg-gradient-to-b ${getMoodBg(moodScore)} transition-colors duration-700`}>
       <Navbar />
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-warm-gray-900 text-gray-800">
-            Reflective Diary
-          </h1>
-          <p className="mt-1 text-gray-500">
-            A space for your thoughts, feelings, and reflections.
-          </p>
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Reflective Diary</h1>
+          <p className="text-sm text-gray-500 mt-1">Capture your thoughts, track your mood and the weather</p>
         </div>
 
-        {/* Error / Success messages */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center justify-between">
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex justify-between">
             <span>{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="ml-2 text-red-400 hover:text-red-600"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <button onClick={() => setError("")} className="text-red-500">&times;</button>
           </div>
         )}
         {successMsg && (
@@ -218,252 +174,166 @@ export default function DiaryPage() {
           </div>
         )}
 
-        {/* Today's entry card */}
-        <div className="bg-white rounded-xl shadow-sm border border-amber-100 p-6 mb-8">
+        {/* Today's Entry Card */}
+        <div className={`bg-white rounded-2xl shadow-sm border-2 ${getMoodAccent(moodScore)} p-6 mb-8 transition-colors duration-500`}>
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-800">
                 {isEditMode ? "Edit Today's Entry" : "Today's Entry"}
               </h2>
-              <p className="text-sm text-amber-600 mt-0.5">
-                {formatDateDisplay(today)}
-              </p>
+              <p className="text-sm text-amber-600 mt-0.5">{formatDateDisplay(today)}</p>
             </div>
             {isEditMode && (
-              <span className="text-xs font-medium bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full">
-                Editing
-              </span>
+              <span className="text-xs font-medium bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full">Editing</span>
             )}
           </div>
 
           {/* Mood selector */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-600 mb-2">
-              How are you feeling?
-            </label>
+            <label className="block text-sm font-medium text-gray-600 mb-2">How are you feeling?</label>
             <div className="flex flex-wrap gap-1.5">
               {Array.from({ length: 10 }, (_, i) => i + 1).map((score) => {
                 const isSelected = moodScore === score;
-                const showEmoji = [1, 3, 5, 7, 10].includes(score);
                 return (
-                  <button
-                    key={score}
-                    onClick={() =>
-                      setMoodScore(isSelected ? null : score)
-                    }
-                    className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium
-                      transition-all duration-150 border-2
-                      ${
-                        isSelected
-                          ? `${getMoodColor(score)} text-white border-transparent ring-2 ring-offset-1 ring-amber-400 scale-110`
-                          : "bg-gray-50 text-gray-500 border-gray-200 hover:border-amber-300 hover:bg-amber-50"
-                      }`}
+                  <button key={score} onClick={() => setMoodScore(isSelected ? null : score)}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all border-2 ${
+                      isSelected
+                        ? `${getMoodColor(score)} text-white border-transparent ring-2 ring-offset-1 ring-amber-400 scale-110`
+                        : "bg-gray-50 text-gray-500 border-gray-200 hover:border-amber-300 hover:bg-amber-50"
+                    }`}
                     title={`Mood: ${score}/10`}
                   >
-                    {showEmoji ? MOOD_EMOJIS[score] : score}
+                    {MOOD_EMOJIS[score] || score}
                   </button>
                 );
               })}
             </div>
             {moodScore && (
-              <p className="text-xs text-gray-400 mt-1.5">
-                Mood: {moodScore}/10 {MOOD_EMOJIS[moodScore]}
-              </p>
+              <p className="text-xs text-gray-400 mt-1.5">Mood: {moodScore}/10 {MOOD_EMOJIS[moodScore]}</p>
             )}
           </div>
 
-          {/* Content textarea */}
+          {/* Weather selector */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-600 mb-2">What&apos;s the weather?</label>
+            <div className="flex flex-wrap gap-2">
+              {WEATHER_OPTIONS.map((w) => (
+                <button key={w.key} onClick={() => setWeather(weather === w.key ? null : w.key)}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-all ${
+                    weather === w.key
+                      ? "bg-blue-100 border-blue-300 text-blue-700 ring-1 ring-blue-300"
+                      : "bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300"
+                  }`}
+                >
+                  {w.emoji} {w.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content */}
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="What's on your mind today? Write about your day, what you learned, how you're feeling..."
-            className="w-full h-40 p-4 border border-gray-200 rounded-lg text-gray-700 placeholder-gray-400
+            className="w-full h-40 p-4 border border-gray-200 rounded-xl text-gray-700 placeholder-gray-400
               focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-amber-300
-              resize-y bg-amber-50/30"
+              resize-y bg-amber-50/20"
           />
 
-          {/* Save button */}
           <div className="mt-4 flex justify-end">
-            <button
-              onClick={handleSave}
-              disabled={saving || !content.trim()}
-              className="px-6 py-2.5 bg-amber-500 text-white font-medium rounded-lg
-                hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed
-                transition-colors shadow-sm"
-            >
-              {saving ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                  </svg>
-                  Saving...
-                </span>
-              ) : isEditMode ? (
-                "Update Entry"
-              ) : (
-                "Save Entry"
-              )}
+            <button onClick={handleSave} disabled={saving || !content.trim()}
+              className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium rounded-xl
+                hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed
+                transition-all shadow-sm hover:shadow-md">
+              {saving ? "Saving..." : isEditMode ? "Update Entry" : "Save Entry"}
             </button>
           </div>
         </div>
 
-        {/* Mood trend */}
+        {/* Mood Trend */}
         {moodTrendEntries.length > 1 && (
-          <div className="bg-white rounded-xl shadow-sm border border-amber-100 p-6 mb-8">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              Mood Trend
-            </h2>
+          <div className="bg-white rounded-2xl shadow-sm border border-amber-100 p-6 mb-8">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">Mood Trend</h2>
             <div className="flex items-end gap-3 h-28">
               {moodTrendEntries.map((entry) => {
                 const score = entry.moodScore!;
                 const heightPercent = (score / 10) * 100;
                 return (
-                  <div
-                    key={entry.id}
-                    className="flex flex-col items-center flex-1 gap-1"
-                  >
-                    <span className="text-xs text-gray-500">
-                      {MOOD_EMOJIS[score] || score}
-                    </span>
+                  <div key={entry.id} className="flex flex-col items-center flex-1 gap-1">
+                    <span className="text-xs text-gray-500">{MOOD_EMOJIS[score] || score}</span>
                     <div className="w-full flex items-end justify-center" style={{ height: "80px" }}>
-                      <div
-                        className={`w-6 rounded-t-md ${getMoodColor(score)} transition-all duration-300`}
+                      <div className={`w-6 rounded-t-md ${getMoodColor(score)} transition-all duration-300`}
                         style={{ height: `${heightPercent}%`, minHeight: "4px" }}
-                        title={`${score}/10 on ${entry.entryDate}`}
-                      />
+                        title={`${score}/10 on ${entry.entryDate}`} />
                     </div>
-                    <span className="text-[10px] text-gray-400 whitespace-nowrap">
-                      {entry.entryDate.slice(5)}
-                    </span>
+                    <span className="text-[10px] text-gray-400 whitespace-nowrap">{entry.entryDate.slice(5)}</span>
                   </div>
                 );
               })}
             </div>
-            <p className="text-xs text-gray-400 mt-3 text-center">
-              Last {moodTrendEntries.length} entries with mood scores
-            </p>
           </div>
         )}
 
-        {/* Past entries section */}
+        {/* Past Entries */}
         <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">
-            Past Entries
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">Past Entries</h2>
 
-          {/* Search bar */}
+          {/* Search */}
           <div className="flex gap-2 mb-4">
             <div className="relative flex-1">
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <input
-                type="text"
-                value={searchQuery}
+              <input type="text" value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 placeholder="Search entries..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700
-                  placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-amber-300"
-              />
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300" />
             </div>
-            <button
-              onClick={handleSearch}
-              className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg text-sm font-medium
-                hover:bg-amber-200 transition-colors"
-            >
-              Search
-            </button>
-            {searchQuery && (
-              <button
-                onClick={clearSearch}
-                className="px-3 py-2 text-gray-400 hover:text-gray-600 text-sm"
-              >
-                Clear
-              </button>
-            )}
+            <button onClick={handleSearch} className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-200">Search</button>
+            {searchQuery && <button onClick={clearSearch} className="px-3 py-2 text-gray-400 hover:text-gray-600 text-sm">Clear</button>}
           </div>
 
-          {/* Loading state */}
           {loading && (
             <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin w-6 h-6 text-amber-500" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-              </svg>
-              <span className="ml-2 text-gray-500 text-sm">Loading entries...</span>
+              <div className="w-8 h-8 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
             </div>
           )}
 
-          {/* Empty state */}
           {!loading && pastEntries.length === 0 && (
-            <div className="text-center py-12 bg-white rounded-xl border border-dashed border-amber-200">
-              <svg
-                className="mx-auto w-12 h-12 text-amber-300 mb-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                />
-              </svg>
+            <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-amber-200">
+              <div className="text-4xl mb-3">{"\u{1F4DD}"}</div>
               <p className="text-gray-500 font-medium">No past entries yet</p>
               <p className="text-gray-400 text-sm mt-1">
-                {searchQuery
-                  ? "No entries match your search."
-                  : "Start writing above to create your first diary entry."}
+                {searchQuery ? "No entries match your search." : "Start writing above to create your first diary entry."}
               </p>
             </div>
           )}
 
-          {/* Entry list */}
           {!loading && pastEntries.length > 0 && (
             <div className="space-y-3">
               {pastEntries.map((entry) => {
                 const isExpanded = expandedEntries.has(entry.id);
                 const isLong = entry.content.length > 200;
-                const preview = isLong
-                  ? entry.content.slice(0, 200) + "..."
-                  : entry.content;
+                const preview = isLong ? entry.content.slice(0, 200) + "..." : entry.content;
 
                 return (
-                  <div
-                    key={entry.id}
-                    className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden
-                      hover:border-amber-200 transition-colors"
-                  >
-                    <button
-                      onClick={() => isLong && toggleExpanded(entry.id)}
-                      className="w-full text-left p-4"
-                    >
+                  <div key={entry.id}
+                    className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:border-amber-200 transition-colors">
+                    <button onClick={() => isLong && toggleExpanded(entry.id)} className="w-full text-left p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <span className="text-sm font-medium text-gray-700">
-                              {formatDateDisplay(entry.entryDate)}
-                            </span>
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <span className="text-sm font-medium text-gray-700">{formatDateDisplay(entry.entryDate)}</span>
                             {entry.moodScore && (
-                              <span
-                                className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getMoodBadgeStyle(
-                                  entry.moodScore
-                                )}`}
-                              >
-                                {MOOD_EMOJIS[entry.moodScore] || ""} {entry.moodScore}/10
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getMoodBadgeStyle(entry.moodScore)}`}>
+                                {MOOD_EMOJIS[entry.moodScore]} {entry.moodScore}/10
+                              </span>
+                            )}
+                            {entry.weather && (
+                              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+                                {getWeatherEmoji(entry.weather)} {WEATHER_OPTIONS.find(w => w.key === entry.weather)?.label}
                               </span>
                             )}
                           </div>
@@ -485,7 +355,6 @@ export default function DiaryPage() {
           )}
         </div>
       </main>
-      <Footer />
     </div>
   );
 }

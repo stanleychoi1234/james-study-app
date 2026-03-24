@@ -2,18 +2,20 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseProgressFromEmail } from "@/lib/assignment-utils";
 
-// Extract reference code from email subject line
 function extractReferenceCode(subject: string): string | null {
   const match = subject.match(/\[?(ASG-[A-Z2-9]{6})\]?/);
   return match ? match[1] : null;
 }
 
-// POST /api/email/webhook — process inbound email replies to update assignment progress
+// POST /api/email/webhook — process inbound email from AgentMail webhook
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const { from, subject, text } = body;
+    // AgentMail sends { message: { from, subject, text, message_id } }
+    // Also support flat format for direct calls
+    const email = body.message || body;
+    const { from, subject, text } = email;
 
     if (!from || !subject || !text) {
       return NextResponse.json(
@@ -22,7 +24,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Extract reference code from subject
     const referenceCode = extractReferenceCode(subject);
     if (!referenceCode) {
       return NextResponse.json(
@@ -31,60 +32,49 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find the assignment
     const assignment = await prisma.assignment.findUnique({
       where: { referenceCode },
     });
 
     if (!assignment) {
-      return NextResponse.json(
-        { error: "Assignment not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
     }
 
-    // Verify sender email matches reminder email
+    // Verify sender
     const senderEmail = typeof from === "string"
       ? from.match(/<(.+)>/)?.[1] || from.trim()
       : from;
 
-    if (
-      assignment.reminderEmail &&
-      senderEmail.toLowerCase() !== assignment.reminderEmail.toLowerCase()
-    ) {
-      return NextResponse.json(
-        { error: "Sender email does not match" },
-        { status: 403 }
-      );
+    // Allow the reminder email, CC emails, or any email on the same assignment
+    const allowedEmails = [
+      assignment.reminderEmail,
+      ...(assignment.ccEmails?.split(/[,;]/).map((e: string) => e.trim()) || []),
+    ].filter(Boolean).map((e) => (e as string).toLowerCase());
+
+    if (allowedEmails.length > 0 && !allowedEmails.includes(senderEmail.toLowerCase())) {
+      return NextResponse.json({ error: "Sender email not authorized" }, { status: 403 });
     }
 
-    // Parse progress from email body
     const newProgress = parseProgressFromEmail(text);
     if (newProgress === null) {
       return NextResponse.json(
-        { error: "Could not parse progress from email body" },
+        { error: "Could not parse progress from email body. Reply with a percentage like '50%' or 'done'." },
         { status: 400 }
       );
     }
 
-    // Progress cannot decrease
     if (newProgress < assignment.progress) {
       return NextResponse.json(
-        {
-          error: `Progress cannot decrease (current: ${assignment.progress}%, requested: ${newProgress}%)`,
-        },
+        { error: `Progress cannot decrease (current: ${assignment.progress}%, requested: ${newProgress}%)` },
         { status: 400 }
       );
     }
 
-    // Build update
     const updateData: Record<string, unknown> = { progress: newProgress };
-
     if (newProgress > 0 && !assignment.startedAt) {
       updateData.startedAt = new Date();
       updateData.status = "in_progress";
     }
-
     if (newProgress === 100) {
       updateData.status = "completed";
     }
@@ -102,9 +92,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Email webhook error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

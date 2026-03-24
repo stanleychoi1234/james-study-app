@@ -103,6 +103,7 @@ model DiaryEntry {
   entryDate String
   content   String
   moodScore Int?
+  weather   String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

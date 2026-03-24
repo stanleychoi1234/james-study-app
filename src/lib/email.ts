@@ -122,7 +122,7 @@ export async function sendSetupConfirmationEmail({
         View Assignment
       </a>
       <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">
-        StudyApp — Keeping you on track
+        James Study Studio — Keeping you on track
       </p>
     </div>
   `;
@@ -187,7 +187,7 @@ export async function sendReminderEmailV2({
         View Assignment
       </a>
       <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">
-        StudyApp — Keeping you on track
+        James Study Studio — Keeping you on track
       </p>
     </div>
   `;

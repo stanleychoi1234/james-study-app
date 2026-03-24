@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { entryDate, content, moodScore } = await request.json();
+    const { entryDate, content, moodScore, weather } = await request.json();
     const date = entryDate || new Date().toISOString().split("T")[0];
 
     if (!content) {
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
         entryDate: date,
         content,
         moodScore: moodScore ? parseInt(moodScore) : null,
+        weather: weather || null,
       },
     });
 
@@ -73,7 +74,7 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const { entryDate, content, moodScore } = await request.json();
+    const { entryDate, content, moodScore, weather } = await request.json();
 
     if (!entryDate || !content) {
       return NextResponse.json(
@@ -92,7 +93,11 @@ export async function PUT(request: Request) {
 
     const entry = await prisma.diaryEntry.update({
       where: { id: existing.id },
-      data: { content, moodScore: moodScore ? parseInt(moodScore) : null },
+      data: {
+        content,
+        moodScore: moodScore ? parseInt(moodScore) : null,
+        weather: weather !== undefined ? (weather || null) : existing.weather,
+      },
     });
 
     return NextResponse.json({ entry });

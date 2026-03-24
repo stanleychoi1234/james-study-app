@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { AMBIENT_SOUNDS, playCompletionChime } from "@/lib/ambient-audio";
 
 type Phase = "focus" | "shortBreak" | "longBreak";
@@ -579,7 +578,6 @@ export default function PomodoroPage() {
           </div>
         </div>
       </main>
-      <Footer dark />
     </div>
   );
 }

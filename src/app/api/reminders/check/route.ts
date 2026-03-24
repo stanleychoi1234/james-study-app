@@ -3,8 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { getReminderMs } from "@/lib/assignment-utils";
 import { sendReminderEmailV2 } from "@/lib/email";
 
-// POST /api/reminders/check — per-assignment schedule checking with ReminderLog deduplication
+// GET & POST /api/reminders/check — per-assignment schedule checking with ReminderLog deduplication
+// GET is used by external cron services, POST for internal calls
+export async function GET() {
+  return checkAndSendReminders();
+}
+
 export async function POST() {
+  return checkAndSendReminders();
+}
+
+async function checkAndSendReminders() {
   try {
     const now = new Date();
     const results = { checked: 0, sent: 0, skipped: 0, errors: 0 };

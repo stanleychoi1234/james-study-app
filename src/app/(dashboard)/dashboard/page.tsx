@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import { getSmartGreeting, getNextSchoolEvent } from "@/lib/school-calendar";
 
 interface DashboardData {
   assignmentStats: {
@@ -30,7 +31,7 @@ interface DashboardData {
     doneToday: boolean;
     streak: number;
   }[];
-  diaryDays: string[];
+  diaryDays: { date: string; mood: number | null }[];
   todayHasEntry: boolean;
 }
 
@@ -139,15 +140,37 @@ function PieChart({
   );
 }
 
-// Calendar mini component
-function MiniCalendar({ highlightDays }: { highlightDays: string[] }) {
+// Mood-to-yellow intensity: 1 = very light, 10 = dark golden
+function moodToYellow(mood: number | null): string {
+  if (!mood) return "bg-amber-300 text-amber-900"; // default
+  // Scale from very light (1) to dark gold (10)
+  const colors: Record<number, string> = {
+    1: "bg-yellow-50 text-yellow-600",
+    2: "bg-yellow-100 text-yellow-700",
+    3: "bg-yellow-200 text-yellow-800",
+    4: "bg-amber-200 text-amber-800",
+    5: "bg-amber-300 text-amber-900",
+    6: "bg-amber-400 text-white",
+    7: "bg-amber-500 text-white",
+    8: "bg-yellow-500 text-white",
+    9: "bg-yellow-600 text-white",
+    10: "bg-yellow-700 text-white",
+  };
+  return colors[mood] || "bg-amber-300 text-amber-900";
+}
+
+// Calendar mini component with mood-based coloring
+function MiniCalendar({ diaryDays }: { diaryDays: { date: string; mood: number | null }[] }) {
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = now.getDate();
-  const highlightSet = new Set(highlightDays);
+
+  // Map date -> mood
+  const moodMap = new Map<string, number | null>();
+  diaryDays.forEach((d) => moodMap.set(d.date, d.mood));
 
   const monthName = now.toLocaleDateString("en-AU", { month: "long", year: "numeric" });
   const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
@@ -168,23 +191,23 @@ function MiniCalendar({ highlightDays }: { highlightDays: string[] }) {
         {cells.map((day, i) => {
           if (day === null) return <div key={i} />;
           const dateStr =
-            year +
-            "-" +
-            String(month + 1).padStart(2, "0") +
-            "-" +
+            year + "-" +
+            String(month + 1).padStart(2, "0") + "-" +
             String(day).padStart(2, "0");
-          const hasEntry = highlightSet.has(dateStr);
+          const hasEntry = moodMap.has(dateStr);
+          const mood = moodMap.get(dateStr) ?? null;
           const isToday = day === today;
           return (
             <div
               key={i}
-              className={`text-[11px] w-7 h-7 flex items-center justify-center rounded-full mx-auto ${
+              className={`text-[11px] w-7 h-7 flex items-center justify-center rounded-full mx-auto font-medium ${
                 hasEntry
-                  ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white font-bold"
+                  ? `${moodToYellow(mood)} font-bold`
                   : isToday
                   ? "ring-2 ring-blue-300 text-gray-700 font-semibold"
                   : "text-gray-500"
               }`}
+              title={hasEntry ? `Mood: ${mood || "?"}/10` : ""}
             >
               {day}
             </div>
@@ -223,6 +246,7 @@ function SkeletonBlock({ className = "" }: { className?: string }) {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
     fetch("/api/dashboard")
@@ -230,32 +254,50 @@ export default function DashboardPage() {
       .then((d) => setData(d))
       .catch(() => {})
       .finally(() => setLoading(false));
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => { if (d.user?.role) setUserRole(d.user.role); })
+      .catch(() => {});
   }, []);
 
-  const greeting = (() => {
-    const h = new Date().getHours();
-    if (h < 12) return "Good morning";
-    if (h < 17) return "Good afternoon";
-    return "Good evening";
-  })();
+  // Use Brisbane timezone for greeting
+  const brisbaneNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Australia/Brisbane" }));
+  const brisbaneHour = brisbaneNow.getHours();
+  const todayStr = brisbaneNow.getFullYear() + "-" +
+    String(brisbaneNow.getMonth() + 1).padStart(2, "0") + "-" +
+    String(brisbaneNow.getDate()).padStart(2, "0");
+  const greeting = getSmartGreeting(brisbaneHour, todayStr);
+  const schoolEvent = getNextSchoolEvent(todayStr);
 
   return (
     <>
       <Navbar />
       <main className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">{greeting}!</h1>
-            <p className="text-gray-500 mt-1">
-              {new Date().toLocaleDateString("en-AU", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
+        {/* Hero header with background image */}
+        <div className="relative overflow-hidden bg-gray-900 mb-6">
+          <Image src="/images/dashboard-bg.png" alt="" fill className="object-cover opacity-40" />
+          <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 to-gray-900/40" />
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <h1 className="text-2xl font-bold text-white">{greeting}</h1>
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <p className="text-gray-300">
+                {brisbaneNow.toLocaleDateString("en-AU", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
+              {schoolEvent && (
+                <span className="text-xs font-medium bg-blue-500/20 text-blue-300 px-2.5 py-1 rounded-full border border-blue-500/30">
+                  {schoolEvent}
+                </span>
+              )}
+            </div>
           </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
 
           {loading ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -413,7 +455,7 @@ export default function DashboardPage() {
                       Write &rarr;
                     </Link>
                   </div>
-                  <MiniCalendar highlightDays={data.diaryDays} />
+                  <MiniCalendar diaryDays={data.diaryDays} />
                   <div className="mt-3 text-center">
                     {data.todayHasEntry ? (
                       <span className="inline-flex items-center gap-1 text-sm text-green-600 font-medium bg-green-50 px-3 py-1 rounded-full">
@@ -466,12 +508,17 @@ export default function DashboardPage() {
               </div>
 
               {/* Quick Actions */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                 {[
-                  { href: "/assignments", label: "New Assignment", icon: "📋", gradient: "from-blue-500 to-cyan-500" },
-                  { href: "/pomodoro", label: "Focus Session", icon: "🎯", gradient: "from-red-500 to-orange-500" },
-                  { href: "/habits", label: "Track Habits", icon: "✅", gradient: "from-purple-500 to-pink-500" },
-                  { href: "/diary", label: "Write Diary", icon: "📝", gradient: "from-amber-500 to-yellow-500" },
+                  { href: "/assignments", label: "Assignments", icon: "📋", gradient: "from-blue-500 to-cyan-500" },
+                  { href: "/pomodoro", label: "Focus", icon: "🎯", gradient: "from-red-500 to-orange-500" },
+                  { href: "/habits", label: "Habits", icon: "✅", gradient: "from-purple-500 to-pink-500" },
+                  { href: "/meditate", label: "Breathe", icon: "🧘", gradient: "from-indigo-500 to-purple-500" },
+                  { href: "/diary", label: "Diary", icon: "📝", gradient: "from-amber-500 to-yellow-500" },
+                  { href: "/calendar", label: "Calendar", icon: "📅", gradient: "from-teal-500 to-green-500" },
+                  ...((userRole === "manager" || userRole === "deputy_manager")
+                    ? [{ href: "/admin", label: "Users", icon: "👥", gradient: "from-gray-600 to-gray-800" }]
+                    : []),
                 ].map((action) => (
                   <Link
                     key={action.href}
@@ -481,7 +528,7 @@ export default function DashboardPage() {
                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${action.gradient} flex items-center justify-center mx-auto mb-2 text-lg shadow-sm`}>
                       {action.icon}
                     </div>
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                    <span className="text-xs font-medium text-gray-700 group-hover:text-gray-900">
                       {action.label}
                     </span>
                   </Link>
@@ -490,7 +537,6 @@ export default function DashboardPage() {
             </>
           ) : null}
         </div>
-        <Footer />
       </main>
     </>
   );

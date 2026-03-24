@@ -9,7 +9,18 @@ export async function GET(request: Request) {
   }
 
   const userId = authUser.userId;
-  const today = new Date().toISOString().split("T")[0];
+
+  // Get user timezone to compute "today" correctly
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  const tz = user?.timezone || "Australia/Brisbane";
+
+  // Compute today in user's local timezone
+  const nowLocal = new Date().toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
+  const today = nowLocal; // e.g. "2026-03-25"
+
   const todayStart = new Date(`${today}T00:00:00`);
   const todayEnd = new Date(`${today}T23:59:59`);
 
@@ -48,8 +59,7 @@ export async function GET(request: Request) {
     completed: assignments.filter((a) => a.status === "completed").length,
     total: assignments.length,
     overdue: assignments.filter(
-      (a) =>
-        a.status !== "completed" && new Date(a.dueDate) < new Date()
+      (a) => a.status !== "completed" && new Date(a.dueDate) < new Date()
     ).length,
   };
 
@@ -64,39 +74,27 @@ export async function GET(request: Request) {
       progress: a.progress,
     }));
 
-  // Pomodoro today
   const focusMinutesToday = pomodoroSessions.reduce(
-    (sum, s) => sum + s.durationMinutes,
-    0
+    (sum, s) => sum + s.durationMinutes, 0
   );
   const focusSessionsToday = pomodoroSessions.length;
 
-  // Habits today
   const habitsTotal = habits.length;
   const habitsDoneToday = habitLogs.length;
 
-  // Compute streaks for each habit
+  // Compute streaks
   const habitDetails = habits.map((h) => {
     const logDates = new Set(h.logs.map((l) => l.logDate));
     let streak = 0;
-    const d = new Date();
-    // Check today first
-    const todayKey =
-      d.getFullYear() +
-      "-" +
-      String(d.getMonth() + 1).padStart(2, "0") +
-      "-" +
-      String(d.getDate()).padStart(2, "0");
+    const d = new Date(today + "T12:00:00"); // Use noon to avoid date rollover issues
+    const todayKey = today;
     if (logDates.has(todayKey)) {
       streak = 1;
       d.setDate(d.getDate() - 1);
     }
     while (true) {
-      const key =
-        d.getFullYear() +
-        "-" +
-        String(d.getMonth() + 1).padStart(2, "0") +
-        "-" +
+      const key = d.getFullYear() + "-" +
+        String(d.getMonth() + 1).padStart(2, "0") + "-" +
         String(d.getDate()).padStart(2, "0");
       if (logDates.has(key)) {
         streak++;
@@ -113,9 +111,12 @@ export async function GET(request: Request) {
     };
   });
 
-  // Diary - which days this month have entries
-  const diaryDays = diaryEntries.map((e) => e.entryDate);
-  const todayHasEntry = diaryDays.includes(today);
+  // Diary - include moodScore for calendar coloring
+  const diaryDays = diaryEntries.map((e) => ({
+    date: e.entryDate,
+    mood: e.moodScore,
+  }));
+  const todayHasEntry = diaryEntries.some((e) => e.entryDate === today);
 
   return NextResponse.json({
     assignmentStats,
@@ -127,6 +128,5 @@ export async function GET(request: Request) {
     habitDetails,
     diaryDays,
     todayHasEntry,
-    userName: "",
   });
 }
