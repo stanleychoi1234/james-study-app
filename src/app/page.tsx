@@ -99,10 +99,10 @@ export default function Home() {
           <div className="mt-16 flex justify-center">
             <div className="relative rounded-2xl overflow-hidden border border-gray-800 shadow-2xl shadow-blue-500/10 max-w-2xl w-full">
               <Image
-                src="/hero-study.png"
-                alt="Modern study setup"
+                src="/images/hero-bg.png"
+                alt="Futuristic neon study setup with holographic elements"
                 width={1024}
-                height={512}
+                height={1024}
                 className="w-full h-auto"
                 priority
               />
