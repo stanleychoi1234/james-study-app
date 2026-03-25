@@ -267,7 +267,8 @@ export default function AssignmentsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50" style={{ backgroundImage: "url(/images/assignments-bg.png)", backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+      <div className="min-h-screen bg-white/85 backdrop-blur-sm">
       <Navbar />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -744,6 +745,7 @@ export default function AssignmentsPage() {
           </div>
         )}
       </main>
+      </div>
     </div>
   );
 }

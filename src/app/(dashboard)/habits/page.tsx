@@ -178,7 +178,8 @@ export default function HabitsPage() {
   const allDone = totalHabits > 0 && doneToday === totalHabits;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-purple-50/30">
+    <div className="min-h-screen" style={{ backgroundImage: "url(/images/habits-bg.png)", backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+      <div className="min-h-screen bg-white/85 backdrop-blur-sm">
       <Navbar />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -396,6 +397,7 @@ export default function HabitsPage() {
           })}
         </div>
       </main>
+      </div>
     </div>
   );
 }

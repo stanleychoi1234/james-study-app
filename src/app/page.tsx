@@ -9,16 +9,12 @@ export default function Home() {
       {/* Hero Section with background image */}
       <div className="relative">
         {/* Background image */}
-        <div className="absolute inset-0 -z-10">
-          <Image
-            src="/images/hero-bg.png"
-            alt=""
-            fill
-            className="object-cover object-center"
-            priority
-          />
-          <div className="absolute inset-0 bg-gray-950/70" />
-          <div className="absolute inset-0 bg-gradient-to-b from-gray-950/40 via-transparent to-gray-950" />
+        <div
+          className="absolute inset-0 -z-10"
+          style={{ backgroundImage: "url(/images/landing-hero.png)", backgroundSize: "cover", backgroundPosition: "center" }}
+        >
+          <div className="absolute inset-0 bg-gray-950/60" />
+          <div className="absolute inset-0 bg-gradient-to-b from-gray-950/30 via-transparent to-gray-950" />
         </div>
 
         {/* Grid overlay */}
