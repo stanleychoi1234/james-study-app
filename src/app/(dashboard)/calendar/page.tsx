@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import {
   SCHOOL_YEARS,
@@ -41,25 +42,30 @@ export default function CalendarPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50/30">
       <Navbar />
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+
+      {/* Hero banner */}
+      <div className="relative overflow-hidden bg-gray-900 mb-6">
+        <Image src="/images/calendar-banner.png" alt="" fill className="object-cover opacity-40" />
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 to-gray-900/40" />
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">School Calendar</h1>
-            <p className="text-sm text-gray-500 mt-1">Queensland term dates and public holidays</p>
+            <h1 className="text-2xl font-bold text-white">School Calendar</h1>
+            <p className="text-sm text-gray-300 mt-1">Queensland term dates and public holidays</p>
           </div>
           <div className="flex items-center gap-2">
             {[2026, 2027, 2028, 2029].map((y) => (
               <button key={y} onClick={() => setViewYear(y)}
                 className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                  viewYear === y ? "bg-blue-600 text-white" : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                  viewYear === y ? "bg-blue-500 text-white" : "bg-white/10 text-gray-300 border border-white/20 hover:bg-white/20"
                 }`}>
                 {y}
               </button>
             ))}
           </div>
         </div>
+      </div>
 
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
         {/* Legend */}
         <div className="flex flex-wrap gap-4 mb-6 bg-white rounded-xl border border-gray-100 p-4">
           <div className="flex items-center gap-2 text-sm">
