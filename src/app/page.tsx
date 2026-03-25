@@ -5,17 +5,15 @@ import Footer from "@/components/Footer";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col overflow-hidden">
+    <div
+      className="min-h-screen flex flex-col overflow-hidden"
+      style={{ backgroundImage: "url(/images/landing-hero.png)", backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}
+    >
       {/* Hero Section with background image */}
       <div className="relative">
-        {/* Background image */}
-        <div
-          className="absolute inset-0 -z-10"
-          style={{ backgroundImage: "url(/images/landing-hero.png)", backgroundSize: "cover", backgroundPosition: "center" }}
-        >
-          <div className="absolute inset-0 bg-gray-950/60" />
-          <div className="absolute inset-0 bg-gradient-to-b from-gray-950/30 via-transparent to-gray-950" />
-        </div>
+        {/* Dark overlay */}
+        <div className="absolute inset-0 -z-10 bg-gray-950/70" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-gray-950/40 via-transparent to-gray-950/90" />
 
         {/* Grid overlay */}
         <div
@@ -110,8 +108,8 @@ export default function Home() {
         </main>
       </div>
 
-      {/* Features Section - separate bg */}
-      <div className="relative bg-gray-950">
+      {/* Features Section */}
+      <div className="relative bg-gray-950/90">
         {/* Subtle background elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-1/4 left-0 w-72 h-72 bg-blue-600/5 rounded-full blur-3xl" />
