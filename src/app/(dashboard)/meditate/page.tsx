@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import Image from "next/image";
 import Navbar from "@/components/Navbar";
 
 type BreathPhase = "inhale" | "hold" | "exhale" | "holdOut";
@@ -277,10 +276,9 @@ export default function MeditatePage() {
 
       <Navbar />
 
-      <main className="flex-1 relative">
-        <Image src="/images/meditate-bg.png" alt="" fill className="object-cover opacity-20" />
+      <main className="flex-1 relative" style={{ backgroundImage: "url(/images/meditate-bg.png)", backgroundSize: "cover", backgroundPosition: "center" }}>
         <div className={`absolute inset-0 bg-gradient-to-b ${
-          sessionState === "active" ? PHASE_COLORS[displayPhase] : "from-indigo-950/50 to-gray-950"
+          sessionState === "active" ? PHASE_COLORS[displayPhase] : "from-indigo-950/80 to-gray-950/90"
         } transition-all duration-1000`} />
 
         <div className="relative z-10 max-w-xl mx-auto px-4 sm:px-6 py-8">

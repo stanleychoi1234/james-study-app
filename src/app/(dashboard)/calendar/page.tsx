@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import {
   SCHOOL_YEARS,
@@ -44,9 +43,11 @@ export default function CalendarPage() {
       <Navbar />
 
       {/* Hero banner */}
-      <div className="relative overflow-hidden bg-gray-900 mb-6">
-        <Image src="/images/calendar-banner.png" alt="" fill className="object-cover opacity-40" />
-        <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 to-gray-900/40" />
+      <div
+        className="relative overflow-hidden bg-gray-900 mb-6"
+        style={{ backgroundImage: "url(/images/calendar-banner.png)", backgroundSize: "cover", backgroundPosition: "center" }}
+      >
+        <div className="absolute inset-0 bg-gray-900/60" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">School Calendar</h1>

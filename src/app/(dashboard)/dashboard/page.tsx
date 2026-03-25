@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import { getSmartGreeting, getNextSchoolEvent } from "@/lib/school-calendar";
 
@@ -274,9 +273,11 @@ export default function DashboardPage() {
       <Navbar />
       <main className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50/30">
         {/* Hero header with background image */}
-        <div className="relative overflow-hidden bg-gray-900 mb-6">
-          <Image src="/images/dashboard-bg.png" alt="" fill className="object-cover opacity-40" />
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 to-gray-900/40" />
+        <div
+          className="relative overflow-hidden bg-gray-900 mb-6"
+          style={{ backgroundImage: "url(/images/dashboard-bg.png)", backgroundSize: "cover", backgroundPosition: "center" }}
+        >
+          <div className="absolute inset-0 bg-gray-900/60" />
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <h1 className="text-2xl font-bold text-white">{greeting}</h1>
             <div className="flex items-center gap-3 mt-1 flex-wrap">
