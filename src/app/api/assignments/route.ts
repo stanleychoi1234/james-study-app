@@ -23,6 +23,7 @@ export async function GET(request: Request) {
   const assignments = await prisma.assignment.findMany({
     where,
     orderBy: { dueDate: "asc" },
+    include: { subtasks: { orderBy: { sortOrder: "asc" } } },
   });
 
   return NextResponse.json({ assignments });
@@ -45,6 +46,9 @@ export async function POST(request: Request) {
       reminderSchedule,
       recurType,
       recurEndDate,
+      isImportant,
+      estimatedPomodoros,
+      category,
     } = await request.json();
 
     if (!title || !dueDate) {
@@ -102,6 +106,9 @@ export async function POST(request: Request) {
         referenceCode,
         recurType: recurType || null,
         recurEndDate: parsedRecurEnd,
+        isImportant: !!isImportant,
+        estimatedPomodoros: Math.max(1, Math.min(16, parseInt(estimatedPomodoros) || 1)),
+        category: category || "School",
       },
     });
 
@@ -141,6 +148,9 @@ export async function POST(request: Request) {
             recurType,
             recurEndDate: parsedRecurEnd,
             recurParentId: assignment.id,
+            isImportant: !!isImportant,
+            estimatedPomodoros: Math.max(1, Math.min(16, parseInt(estimatedPomodoros) || 1)),
+            category: category || "School",
           },
         });
         createdIds.push(recRef);

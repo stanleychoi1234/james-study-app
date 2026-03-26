@@ -29,22 +29,22 @@ export function generateReferenceCode(): string {
 export function parseProgressFromEmail(body: string): number | null {
   const text = body.toLowerCase().trim();
 
-  // Check for completion keywords first
-  if (/\b(done|complete|completed|finished|100\s*%)\b/.test(text)) {
-    return 100;
-  }
+  // Check for keyword patterns first (before completion check, since "half done" contains "done")
+  if (/\b(half|halfway)\b/.test(text)) return 50;
+  if (/\b(quarter)\s*(done|complete)?\b/.test(text)) return 25;
+  if (/\b(almost|nearly)\s*(done|complete|finished)?\b/.test(text)) return 90;
 
   // Check for percentage patterns: "50%", "50% done", "50 percent"
-  const percentMatch = text.match(/\b(\d{1,3})\s*(%|percent)\s*(done|complete|completed)?\b/);
+  const percentMatch = text.match(/\b(\d{1,3})\s*(%|percent)/);
   if (percentMatch) {
     const value = parseInt(percentMatch[1]);
     if (value >= 0 && value <= 100) return value;
   }
 
-  // Check for keyword patterns: "25% done", "half done", "halfway"
-  if (/\b(half|halfway)\b/.test(text)) return 50;
-  if (/\b(quarter|25)\s*(done|complete)?\b/.test(text)) return 25;
-  if (/\b(almost|nearly|90)\s*(done|complete|finished)?\b/.test(text)) return 90;
+  // Check for completion keywords
+  if (/\b(done|complete|completed|finished)\b/.test(text)) {
+    return 100;
+  }
 
   // Check for "started" / "start"
   if (/\b(start|started|beginning)\b/.test(text)) return 1;

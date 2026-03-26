@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "@/components/Navbar";
+import { MEDITATION_MUSIC } from "@/lib/ambient-audio";
 
 type BreathPhase = "inhale" | "hold" | "exhale" | "holdOut";
 type SessionState = "idle" | "countdown" | "active" | "finished";
@@ -73,6 +74,12 @@ export default function MeditatePage() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   // Track active guide oscillator so we can stop it on phase change
   const guideOscRef = useRef<{ osc: OscillatorNode; gain: GainNode } | null>(null);
+
+  // Meditation music
+  const [selectedMusic, setSelectedMusic] = useState<number | null>(null);
+  const [musicVolume, setMusicVolume] = useState(30);
+  const musicGainRef = useRef<GainNode | null>(null);
+  const musicInstanceRef = useRef<{ start: () => void; stop: () => void } | null>(null);
 
   // Use refs for the timer state to avoid stale closures
   const timeRemainingRef = useRef(0);
@@ -155,6 +162,36 @@ export default function MeditatePage() {
     }
   }, []);
 
+  // Music controls
+  function startMusic() {
+    if (selectedMusic === null) return;
+    stopMusic();
+    const ctx = getOrCreateAudioCtx();
+    if (!musicGainRef.current) {
+      musicGainRef.current = ctx.createGain();
+      musicGainRef.current.connect(ctx.destination);
+    }
+    musicGainRef.current.gain.value = musicVolume / 100;
+    const music = MEDITATION_MUSIC[selectedMusic];
+    const instance = music.create(ctx, musicGainRef.current);
+    instance.start();
+    musicInstanceRef.current = instance;
+  }
+
+  function stopMusic() {
+    if (musicInstanceRef.current) {
+      musicInstanceRef.current.stop();
+      musicInstanceRef.current = null;
+    }
+  }
+
+  // Update music volume in real-time
+  useEffect(() => {
+    if (musicGainRef.current) {
+      musicGainRef.current.gain.value = musicVolume / 100;
+    }
+  }, [musicVolume]);
+
   // Countdown
   useEffect(() => {
     if (sessionState !== "countdown") return;
@@ -175,6 +212,7 @@ export default function MeditatePage() {
 
       setSessionState("active");
       startGuideTone(firstPhase.phase, firstPhase.dur);
+      if (selectedMusic !== null) startMusic();
       return;
     }
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
@@ -194,6 +232,7 @@ export default function MeditatePage() {
       if (timeRemainingRef.current <= 0) {
         setSessionState("finished");
         stopGuideTone();
+        stopMusic();
         // Play completion chime
         const ctx = getOrCreateAudioCtx();
         [523.25, 659.25, 783.99].forEach((f, i) => {
@@ -252,6 +291,7 @@ export default function MeditatePage() {
     setSessionState("idle");
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     stopGuideTone();
+    stopMusic();
   }
 
   // Visual: breathing circle scale
@@ -278,7 +318,7 @@ export default function MeditatePage() {
 
       <main className="flex-1 relative" style={{ backgroundImage: "url(/images/meditate-bg.png)", backgroundSize: "cover", backgroundPosition: "center" }}>
         <div className={`absolute inset-0 bg-gradient-to-b ${
-          sessionState === "active" ? PHASE_COLORS[displayPhase] : "from-indigo-950/80 to-gray-950/90"
+          sessionState === "active" ? PHASE_COLORS[displayPhase] : "from-indigo-950/50 to-gray-950/60"
         } transition-all duration-1000`} />
 
         <div className="relative z-10 max-w-xl mx-auto px-4 sm:px-6 py-8">
@@ -390,6 +430,44 @@ export default function MeditatePage() {
                   <span className="text-xs text-gray-400 w-8 text-right">{volume}%</span>
                 </div>
               )}
+
+              {/* Meditation Music */}
+              <div className="bg-white/5 rounded-xl border border-white/10 p-4 mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Background Music</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">Optional calm music during your session</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <button
+                    onClick={() => setSelectedMusic(null)}
+                    className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
+                      selectedMusic === null ? "bg-white/20 text-white ring-1 ring-white/30" : "bg-white/5 text-gray-400 hover:bg-white/10"
+                    }`}
+                  >
+                    None
+                  </button>
+                  {MEDITATION_MUSIC.map((m, i) => (
+                    <button key={m.name} onClick={() => setSelectedMusic(i)}
+                      className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
+                        selectedMusic === i ? "bg-white/20 text-white ring-1 ring-white/30" : "bg-white/5 text-gray-400 hover:bg-white/10"
+                      }`}>
+                      {m.emoji} {m.name}
+                    </button>
+                  ))}
+                </div>
+                {selectedMusic !== null && (
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6l-4 4H4v4h4l4 4V6z" />
+                    </svg>
+                    <input type="range" min={0} max={100} value={musicVolume} onChange={(e) => setMusicVolume(Number(e.target.value))}
+                      className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg" />
+                    <span className="text-xs text-gray-400 w-8 text-right">{musicVolume}%</span>
+                  </div>
+                )}
+              </div>
 
               {/* Start */}
               <div className="text-center">

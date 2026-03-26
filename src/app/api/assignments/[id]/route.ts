@@ -71,6 +71,16 @@ export async function PUT(
     updateData.status = "in_progress";
   }
 
+  // New Eisenhower/task fields
+  if (body.isImportant !== undefined) updateData.isImportant = !!body.isImportant;
+  if (body.estimatedPomodoros !== undefined) updateData.estimatedPomodoros = Math.max(1, Math.min(16, parseInt(body.estimatedPomodoros) || 1));
+  if (body.category !== undefined) updateData.category = body.category;
+  if (body.sortOrder !== undefined) updateData.sortOrder = parseInt(body.sortOrder) || 0;
+  if (body.emailEnabled !== undefined) updateData.emailEnabled = !!body.emailEnabled;
+  if (body.reminderEmail !== undefined) updateData.reminderEmail = body.reminderEmail || null;
+  if (body.ccEmails !== undefined) updateData.ccEmails = body.ccEmails || null;
+  if (body.reminderSchedule !== undefined) updateData.reminderSchedule = JSON.stringify(body.reminderSchedule);
+
   // Prevent reverting to pending once started
   if (body.status !== undefined) {
     if (body.status === "pending" && existing.startedAt) {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import {
   SCHOOL_YEARS,
   PUBLIC_HOLIDAYS,
@@ -209,6 +210,7 @@ export default function CalendarPage() {
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

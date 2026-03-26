@@ -20,7 +20,7 @@ interface TodayStats {
 
 // Scenes with direction support
 const SCENES = [
-  { name: "Snow", emoji: "\u{2744}\u{FE0F}", particle: "\u{2744}\u{FE0F}", color: "from-slate-900 to-blue-950", count: 30, direction: "down" as const },
+  { name: "Snow", emoji: "\u{2744}\u{FE0F}", particle: "\u{2022}", color: "from-slate-900 to-blue-950", count: 40, direction: "down" as const },
   { name: "Rain", emoji: "\u{1F327}\u{FE0F}", particle: "\u{2758}", color: "from-gray-900 to-slate-800", count: 40, direction: "down" as const },
   { name: "Cherry", emoji: "\u{1F338}", particle: "\u{1F338}", color: "from-pink-950 to-purple-950", count: 20, direction: "down" as const },
   { name: "Stars", emoji: "\u{2B50}", particle: "\u{2728}", color: "from-indigo-950 to-black", count: 25, direction: "down" as const },
@@ -80,14 +80,34 @@ function DurationInput({ id, label, value, onChange, min = 1, max = 120, disable
 function Particles({ scene, visible }: { scene: typeof SCENES[number]; visible: boolean }) {
   if (!visible) return null;
   const isUp = scene.direction === "up";
+  const isSnow = scene.name === "Snow";
 
   const particles = Array.from({ length: scene.count }, (_, i) => {
     const left = Math.random() * 100;
     const delay = Math.random() * 8;
-    const duration = 3 + Math.random() * 5;
-    const size = 10 + Math.random() * 16;
-    const drift = (Math.random() - 0.5) * 50;
+    const duration = isSnow ? 6 + Math.random() * 8 : 3 + Math.random() * 5;
+    const size = isSnow ? 3 + Math.random() * 5 : 10 + Math.random() * 16;
+    const drift = (Math.random() - 0.5) * (isSnow ? 80 : 50);
     const anim = isUp ? "particleRise" : "particleFall";
+
+    if (isSnow) {
+      return (
+        <span
+          key={i}
+          className="absolute rounded-full pointer-events-none"
+          style={{
+            left: `${left}%`,
+            top: "-3%",
+            width: `${size}px`,
+            height: `${size}px`,
+            backgroundColor: "rgba(255,255,255,0.8)",
+            boxShadow: "0 0 4px rgba(255,255,255,0.4)",
+            animation: `particleFall ${duration}s ${delay}s linear infinite`,
+            "--drift": `${drift}px`,
+          } as React.CSSProperties}
+        />
+      );
+    }
 
     return (
       <span

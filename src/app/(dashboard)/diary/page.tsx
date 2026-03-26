@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
 interface DiaryEntry {
   id: string;
@@ -154,7 +155,7 @@ export default function DiaryPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundImage: "url(/images/diary-bg.png)", backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
-      <div className="min-h-screen transition-colors duration-700" style={{ backgroundColor: "rgba(255,255,255,0.80)" }}>
+      <div className="min-h-screen transition-colors duration-700" style={{ backgroundColor: "rgba(255,255,255,0.65)" }}>
       <Navbar />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -356,6 +357,7 @@ export default function DiaryPage() {
           )}
         </div>
       </main>
+      <Footer />
       </div>
     </div>
   );

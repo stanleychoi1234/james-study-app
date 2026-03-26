@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import { getSmartGreeting, getNextSchoolEvent } from "@/lib/school-calendar";
 
 interface DashboardData {
@@ -34,16 +35,35 @@ interface DashboardData {
   todayHasEntry: boolean;
 }
 
+interface XpInfo {
+  totalXp: number;
+  level: number;
+  progress: number;
+  toNext: number;
+  title: string;
+  multiplier: number;
+  streak: { current: number; longest: number; freezesAvailable: number };
+}
+
+interface ExamInfo {
+  id: string;
+  title: string;
+  subject: string;
+  examDate: string;
+  difficulty: number;
+  completed: boolean;
+}
+
 // Encouraging messages based on assignment progress
 function getAssignmentEncouragement(stats: DashboardData["assignmentStats"]): string {
-  if (stats.total === 0) return "No assignments yet — add your first one to get started!";
-  if (stats.completed === stats.total) return "All assignments complete! You're absolutely crushing it!";
+  if (stats.total === 0) return "No tasks yet — add your first one to get started!";
+  if (stats.completed === stats.total) return "All tasks complete! You're absolutely crushing it!";
   const pct = Math.round((stats.completed / stats.total) * 100);
-  if (pct >= 75) return "Almost there! You've completed " + pct + "% of your assignments. Keep going!";
+  if (pct >= 75) return "Almost there! You've completed " + pct + "% of your tasks. Keep going!";
   if (pct >= 50) return "Halfway done! Solid progress — keep the momentum going!";
-  if (stats.in_progress > 0) return "You're making progress! " + stats.in_progress + " assignment(s) in progress.";
+  if (stats.in_progress > 0) return "You're making progress! " + stats.in_progress + " task(s) in progress.";
   if (stats.overdue > 0) return "You have " + stats.overdue + " overdue — tackle the urgent ones first!";
-  return "Time to get started! Pick an assignment and begin.";
+  return "Time to get started! Pick a task and begin.";
 }
 
 function getFocusEncouragement(minutes: number): string {
@@ -242,29 +262,101 @@ function SkeletonBlock({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse bg-gray-200 rounded-xl ${className}`} />;
 }
 
+const MOOD_EMOJIS = [
+  { emoji: "😢", label: "Awful" },
+  { emoji: "😕", label: "Bad" },
+  { emoji: "😐", label: "Okay" },
+  { emoji: "🙂", label: "Good" },
+  { emoji: "😄", label: "Great" },
+];
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [xpInfo, setXpInfo] = useState<XpInfo | null>(null);
+  const [exams, setExams] = useState<ExamInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState("");
+  const [showMoodCheckIn, setShowMoodCheckIn] = useState(false);
+  const [moodSubmitted, setMoodSubmitted] = useState(false);
+  const [showExamForm, setShowExamForm] = useState(false);
+  const [examForm, setExamForm] = useState({ title: "", subject: "", examDate: "", difficulty: 3 });
 
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((r) => r.json())
-      .then((d) => setData(d))
+    Promise.all([
+      fetch("/api/dashboard").then(r => r.json()),
+      fetch("/api/xp").then(r => r.json()),
+      fetch("/api/exams").then(r => r.json()),
+      fetch("/api/auth/me").then(r => r.json()),
+      fetch("/api/mood").then(r => r.json()),
+    ])
+      .then(([d, x, e, me, moods]) => {
+        setData(d);
+        setXpInfo(x);
+        setExams(e.exams || []);
+        if (me.user?.role) setUserRole(me.user.role);
+        // Check if mood already logged today
+        const today = new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Brisbane" });
+        const todayMood = (moods.checkIns || []).find((m: { date: string }) => m.date === today);
+        if (!todayMood) {
+          setShowMoodCheckIn(true);
+        } else {
+          setMoodSubmitted(true);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => { if (d.user?.role) setUserRole(d.user.role); })
-      .catch(() => {});
+
+    // Auto-update streak on dashboard visit
+    fetch("/api/streak", { method: "POST" }).catch(() => {});
   }, []);
 
-  // Use Brisbane timezone for greeting
-  const brisbaneNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Australia/Brisbane" }));
-  const brisbaneHour = brisbaneNow.getHours();
-  const todayStr = brisbaneNow.getFullYear() + "-" +
-    String(brisbaneNow.getMonth() + 1).padStart(2, "0") + "-" +
-    String(brisbaneNow.getDate()).padStart(2, "0");
+  async function handleMoodCheckIn(mood: number) {
+    setShowMoodCheckIn(false);
+    setMoodSubmitted(true);
+    await fetch("/api/mood", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mood }),
+    });
+    // Award XP for mood check-in
+    await fetch("/api/xp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "mood_checkin" }),
+    });
+  }
+
+  async function handleAddExam() {
+    if (!examForm.title || !examForm.subject || !examForm.examDate) return;
+    const res = await fetch("/api/exams", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(examForm),
+    });
+    const data = await res.json();
+    if (data.exam) {
+      setExams(prev => [...prev, data.exam].sort((a, b) => a.examDate.localeCompare(b.examDate)));
+      setShowExamForm(false);
+      setExamForm({ title: "", subject: "", examDate: "", difficulty: 3 });
+    }
+  }
+
+  async function handleDeleteExam(id: string) {
+    await fetch(`/api/exams/${id}`, { method: "DELETE" });
+    setExams(prev => prev.filter(e => e.id !== id));
+  }
+
+  // Use Brisbane timezone for greeting — use Intl for reliable timezone conversion
+  const brisbaneFormatter = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Brisbane",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  const bParts = brisbaneFormatter.formatToParts(new Date());
+  const bGet = (type: string) => bParts.find(p => p.type === type)?.value || "0";
+  const brisbaneHour = parseInt(bGet("hour"), 10);
+  const todayStr = `${bGet("year")}-${bGet("month")}-${bGet("day")}`;
+  const brisbaneNow = new Date(`${todayStr}T${bGet("hour")}:${bGet("minute")}:00`);
   const greeting = getSmartGreeting(brisbaneHour, todayStr);
   const schoolEvent = getNextSchoolEvent(todayStr);
 
@@ -277,7 +369,7 @@ export default function DashboardPage() {
           className="relative overflow-hidden bg-gray-900 mb-6"
           style={{ backgroundImage: "url(/images/dashboard-bg.png)", backgroundSize: "cover", backgroundPosition: "center" }}
         >
-          <div className="absolute inset-0 bg-gray-900/60" />
+          <div className="absolute inset-0 bg-gray-900/40" />
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <h1 className="text-2xl font-bold text-white">{greeting}</h1>
             <div className="flex items-center gap-3 mt-1 flex-wrap">
@@ -298,7 +390,79 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Mood Check-in Popup */}
+        {showMoodCheckIn && !loading && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center animate-in zoom-in-95">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">How are you feeling?</h3>
+              <p className="text-sm text-gray-500 mb-6">Quick daily check-in (+3 XP)</p>
+              <div className="flex justify-center gap-3">
+                {MOOD_EMOJIS.map((m, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleMoodCheckIn(i + 1)}
+                    className="flex flex-col items-center gap-1 p-3 rounded-xl hover:bg-gray-50 transition-all hover:scale-110"
+                  >
+                    <span className="text-3xl">{m.emoji}</span>
+                    <span className="text-[10px] text-gray-500">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowMoodCheckIn(false)}
+                className="mt-4 text-xs text-gray-400 hover:text-gray-600"
+              >
+                Skip for now
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+
+          {/* XP & Level Bar */}
+          {xpInfo && (
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-4 mb-6 text-white shadow-md -mt-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-lg font-bold">
+                    {xpInfo.level}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm">{xpInfo.title}</div>
+                    <div className="text-indigo-200 text-xs">{xpInfo.totalXp.toLocaleString()} XP</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-center">
+                    <div className="font-bold">🔥 {xpInfo.streak.current}</div>
+                    <div className="text-[10px] text-indigo-200">Streak</div>
+                  </div>
+                  {xpInfo.multiplier > 1 && (
+                    <div className="text-center">
+                      <div className="font-bold text-yellow-300">{xpInfo.multiplier}x</div>
+                      <div className="text-[10px] text-indigo-200">Bonus</div>
+                    </div>
+                  )}
+                  <Link href="/analytics" className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors">
+                    Analytics →
+                  </Link>
+                </div>
+              </div>
+              <div className="mt-3">
+                <div className="flex justify-between text-[10px] text-indigo-200 mb-1">
+                  <span>Level {xpInfo.level}</span>
+                  <span>{xpInfo.toNext} XP to next</span>
+                </div>
+                <div className="w-full bg-white/20 rounded-full h-2">
+                  <div
+                    className="bg-gradient-to-r from-yellow-400 to-orange-400 h-2 rounded-full transition-all"
+                    style={{ width: `${xpInfo.progress * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -315,7 +479,7 @@ export default function DashboardPage() {
                 {/* Assignment Pie Card */}
                 <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-gray-900">Assignments</h2>
+                    <h2 className="text-lg font-bold text-gray-900">Tasks</h2>
                     <Link href="/assignments" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
                       View all &rarr;
                     </Link>
@@ -479,7 +643,7 @@ export default function DashboardPage() {
                   {data.upcoming.length === 0 ? (
                     <div className="text-center py-8">
                       <div className="text-4xl mb-2">🎉</div>
-                      <p className="text-sm text-gray-400">All clear! No upcoming assignments.</p>
+                      <p className="text-sm text-gray-400">All clear! No upcoming tasks.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -508,15 +672,113 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* Exam Countdown */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-gray-900">Exam Countdown</h2>
+                  <button
+                    onClick={() => setShowExamForm(!showExamForm)}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    {showExamForm ? "Cancel" : "+ Add Exam"}
+                  </button>
+                </div>
+
+                {showExamForm && (
+                  <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <input
+                        type="text"
+                        placeholder="Exam title"
+                        value={examForm.title}
+                        onChange={e => setExamForm(f => ({ ...f, title: e.target.value }))}
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Subject"
+                        value={examForm.subject}
+                        onChange={e => setExamForm(f => ({ ...f, subject: e.target.value }))}
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      />
+                      <input
+                        type="date"
+                        value={examForm.examDate}
+                        onChange={e => setExamForm(f => ({ ...f, examDate: e.target.value }))}
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      />
+                      <button
+                        onClick={handleAddExam}
+                        className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {exams.filter(e => !e.completed).length === 0 ? (
+                  <div className="text-center py-6">
+                    <div className="text-3xl mb-2">📚</div>
+                    <p className="text-sm text-gray-400">No upcoming exams. Add one to start your countdown!</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {exams.filter(e => !e.completed).slice(0, 6).map(exam => {
+                      const daysUntil = Math.ceil(
+                        (new Date(exam.examDate + "T23:59:59").getTime() - Date.now()) / 86400000
+                      );
+                      const urgency = daysUntil <= 3 ? "border-red-300 bg-red-50" :
+                                      daysUntil <= 7 ? "border-orange-300 bg-orange-50" :
+                                      daysUntil <= 14 ? "border-yellow-300 bg-yellow-50" :
+                                      "border-green-300 bg-green-50";
+                      const textColor = daysUntil <= 3 ? "text-red-700" :
+                                        daysUntil <= 7 ? "text-orange-700" :
+                                        daysUntil <= 14 ? "text-yellow-700" :
+                                        "text-green-700";
+                      return (
+                        <div key={exam.id} className={`rounded-xl border p-4 ${urgency} relative group`}>
+                          <button
+                            onClick={() => handleDeleteExam(exam.id)}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                          <div className={`text-3xl font-bold ${textColor}`}>
+                            {daysUntil <= 0 ? "TODAY!" : daysUntil}
+                          </div>
+                          <div className={`text-xs ${textColor} mb-1`}>
+                            {daysUntil <= 0 ? "" : daysUntil === 1 ? "day left" : "days left"}
+                          </div>
+                          <div className="font-semibold text-gray-900 text-sm truncate">{exam.title}</div>
+                          <div className="text-xs text-gray-500">{exam.subject}</div>
+                          <div className="flex mt-2 gap-0.5">
+                            {[1, 2, 3, 4, 5].map(s => (
+                              <span key={s} className={`text-xs ${s <= exam.difficulty ? "text-yellow-500" : "text-gray-300"}`}>★</span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               {/* Quick Actions */}
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-10 gap-3">
                 {[
-                  { href: "/assignments", label: "Assignments", icon: "📋", gradient: "from-blue-500 to-cyan-500" },
+                  { href: "/assignments", label: "Tasks", icon: "📋", gradient: "from-blue-500 to-cyan-500" },
+                  { href: "/goals", label: "Goals", icon: "🏆", gradient: "from-emerald-500 to-teal-500" },
+                  { href: "/time-plan", label: "Time Plan", icon: "📊", gradient: "from-violet-500 to-purple-500" },
                   { href: "/pomodoro", label: "Focus", icon: "🎯", gradient: "from-red-500 to-orange-500" },
                   { href: "/habits", label: "Habits", icon: "✅", gradient: "from-purple-500 to-pink-500" },
                   { href: "/meditate", label: "Breathe", icon: "🧘", gradient: "from-indigo-500 to-purple-500" },
                   { href: "/diary", label: "Diary", icon: "📝", gradient: "from-amber-500 to-yellow-500" },
                   { href: "/calendar", label: "Calendar", icon: "📅", gradient: "from-teal-500 to-green-500" },
+                  { href: "/analytics", label: "Analytics", icon: "📊", gradient: "from-indigo-500 to-purple-500" },
+                  { href: "/settings", label: "Settings", icon: "⚙️", gradient: "from-slate-500 to-gray-600" },
                   ...((userRole === "manager" || userRole === "deputy_manager")
                     ? [{ href: "/admin", label: "Users", icon: "👥", gradient: "from-gray-600 to-gray-800" }]
                     : []),
@@ -539,6 +801,7 @@ export default function DashboardPage() {
           ) : null}
         </div>
       </main>
+      <Footer />
     </>
   );
 }
