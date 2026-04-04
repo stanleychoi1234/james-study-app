@@ -9,18 +9,22 @@ export async function GET(request: NextRequest) {
   }
 
   const weekStart = request.nextUrl.searchParams.get("weekStart");
-  if (!weekStart) {
+  // Support fetching multiple weeks (comma-separated) for centered view
+  const weekStarts = request.nextUrl.searchParams.get("weekStarts");
+
+  if (!weekStart && !weekStarts) {
     return NextResponse.json(
-      { error: "weekStart query parameter is required" },
+      { error: "weekStart or weekStarts query parameter is required" },
       { status: 400 }
     );
   }
 
-  // weekStart is stored as a string (ISO date), not a Date object
+  const weeks = weekStarts ? weekStarts.split(",") : [weekStart!];
+
   const slots = await prisma.timePlanSlot.findMany({
     where: {
       userId: user.userId,
-      weekStart: weekStart,
+      weekStart: { in: weeks },
     },
     include: {
       assignment: {
@@ -97,7 +101,6 @@ export async function POST(request: NextRequest) {
   slotDate.setDate(slotDate.getDate() + dayOfWeek);
 
   const dueDate = new Date(assignment.dueDate);
-  // Compare date-only (strip time)
   slotDate.setHours(0, 0, 0, 0);
   dueDate.setHours(0, 0, 0, 0);
 

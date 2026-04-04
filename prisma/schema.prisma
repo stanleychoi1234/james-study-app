@@ -29,6 +29,7 @@ model User {
   exams             Exam[]
   xpEvents          XpEvent[]
   studyStreak       StudyStreak?
+  calendarSyncs     CalendarSync[]
 }
 
 model Assignment {
@@ -158,12 +159,33 @@ model WeeklyCommitment {
   dayOfWeek Int
   startHour Int
   startMin  Int
+  endHour   Int      @default(0)
+  endMin    Int      @default(30)
   duration  Int      @default(30)
-  color     String   @default("#3b82f6")
+  color     String   @default("#9ca3af")
+  termStart String?
+  termEnd   String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+}
+
+model CalendarSync {
+  id           String   @id @default(uuid())
+  userId       String
+  provider     String
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  calendarId   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
   @@index([userId])
 }
 

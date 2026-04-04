@@ -12,6 +12,8 @@ export function proxy(request: NextRequest) {
     publicPaths.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
+    pathname.startsWith("/music") ||
+    pathname.startsWith("/images") ||
     pathname === "/"
   ) {
     return NextResponse.next();

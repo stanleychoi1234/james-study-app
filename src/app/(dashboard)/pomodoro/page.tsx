@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "@/components/Navbar";
 import { AMBIENT_SOUNDS, playCompletionChime } from "@/lib/ambient-audio";
+import { MUSIC_TRACKS, createMusicPlayer } from "@/lib/music-player";
 
 type Phase = "focus" | "shortBreak" | "longBreak";
 type CountdownState = "idle" | "breathing" | "running" | "paused";
@@ -148,13 +149,19 @@ export default function PomodoroPage() {
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>("");
   const [todayStats, setTodayStats] = useState<TodayStats>({ totalFocusMinutes: 0, sessionsCompleted: 0 });
 
-  // Audio
+  // Audio (ambient sounds — synthesized)
   const [selectedSound, setSelectedSound] = useState<number | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [volume, setVolume] = useState(50);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
   const soundInstanceRef = useRef<{ start: () => void; stop: () => void } | null>(null);
+
+  // Music (MP3 tracks — fade in/out, endless loop)
+  const [selectedMusic, setSelectedMusic] = useState<number | null>(null);
+  const [musicEnabled, setMusicEnabled] = useState(false);
+  const [musicVolume, setMusicVolume] = useState(40);
+  const musicPlayerRef = useRef(createMusicPlayer());
 
   const [selectedScene, setSelectedScene] = useState(0);
   const [sceneEnabled, setSceneEnabled] = useState(true);
@@ -244,15 +251,35 @@ export default function PomodoroPage() {
     soundInstanceRef.current = instance;
   }
 
-  // Update volume in real-time
+  function startMusic() {
+    if (!musicEnabled || selectedMusic === null) return;
+    musicPlayerRef.current.play(MUSIC_TRACKS[selectedMusic].file, musicVolume / 100);
+  }
+
+  function stopMusic() {
+    musicPlayerRef.current.stop();
+  }
+
+  // Update volumes in real-time
   useEffect(() => {
     if (masterGainRef.current) {
       masterGainRef.current.gain.value = volume / 100;
     }
   }, [volume]);
 
+  useEffect(() => {
+    musicPlayerRef.current.setVolume(musicVolume / 100);
+  }, [musicVolume]);
+
+  // Cleanup music player on unmount
+  useEffect(() => {
+    const player = musicPlayerRef.current;
+    return () => player.destroy();
+  }, []);
+
   const handleTimerComplete = useCallback(async () => {
     stopAmbientSound();
+    stopMusic();
     if (audioCtxRef.current) playCompletionChime(audioCtxRef.current);
 
     if (phase === "focus") {
@@ -302,6 +329,7 @@ export default function PomodoroPage() {
       setCountdownState("running");
       endTimeRef.current = Date.now() + secondsLeft * 1000;
       startAmbientSound();
+      startMusic();
       autoStartAssignment();
       return;
     }
@@ -320,12 +348,14 @@ export default function PomodoroPage() {
     endTimeRef.current = null;
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     stopAmbientSound();
+    stopMusic();
   }
 
   function handleResume() {
     setCountdownState("running");
     endTimeRef.current = Date.now() + secondsLeft * 1000;
     startAmbientSound();
+    startMusic();
   }
 
   function handleReset() {
@@ -334,6 +364,7 @@ export default function PomodoroPage() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     setSecondsLeft(getDuration(phase) * 60);
     stopAmbientSound();
+    stopMusic();
   }
 
   function switchPhase(newPhase: Phase) {
@@ -353,6 +384,12 @@ export default function PomodoroPage() {
     else if (isRunning) startAmbientSound();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soundEnabled, selectedSound]);
+
+  useEffect(() => {
+    if (!musicEnabled) stopMusic();
+    else if (isRunning && selectedMusic !== null) startMusic();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicEnabled, selectedMusic]);
 
   useEffect(() => { setSelectedScene(Math.floor(Math.random() * SCENES.length)); }, []);
 
@@ -501,6 +538,41 @@ export default function PomodoroPage() {
               <div key={i} className={`w-3 h-3 rounded-full transition-all ${i < sessionsCompleted % 4 ? `bg-gradient-to-r ${config.gradient} shadow-lg` : "bg-white/10"}`} />
             ))}
             <span className="text-xs text-gray-500 ml-2">{sessionsCompleted % 4}/4 to long break</span>
+          </div>
+
+          {/* Music */}
+          <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white">Background Music</h3>
+              <button onClick={() => setMusicEnabled(!musicEnabled)}
+                className={`text-xs px-2 py-1 rounded-full ${musicEnabled ? "bg-green-500/20 text-green-400" : "bg-white/10 text-gray-500"}`}>
+                {musicEnabled ? "ON" : "OFF"}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {MUSIC_TRACKS.map((t, i) => (
+                <button key={t.name} onClick={() => { setSelectedMusic(i); if (!musicEnabled) setMusicEnabled(true); }}
+                  className={`px-2.5 py-1.5 text-xs rounded-lg transition-all ${selectedMusic === i ? "bg-white/20 text-white ring-1 ring-white/30" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}>
+                  {t.emoji} {t.name}
+                </button>
+              ))}
+            </div>
+            {musicEnabled && (
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6l-4 4H4v4h4l4 4V6z" />
+                </svg>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={musicVolume}
+                  onChange={(e) => setMusicVolume(Number(e.target.value))}
+                  className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-blue-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg"
+                />
+                <span className="text-xs text-gray-400 w-8 text-right">{musicVolume}%</span>
+              </div>
+            )}
           </div>
 
           {/* Scene + Sound Controls */}

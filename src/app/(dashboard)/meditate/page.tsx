@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "@/components/Navbar";
-import { MEDITATION_MUSIC } from "@/lib/ambient-audio";
+import { MUSIC_TRACKS, createMusicPlayer } from "@/lib/music-player";
 
 type BreathPhase = "inhale" | "hold" | "exhale" | "holdOut";
 type SessionState = "idle" | "countdown" | "active" | "finished";
@@ -75,11 +75,10 @@ export default function MeditatePage() {
   // Track active guide oscillator so we can stop it on phase change
   const guideOscRef = useRef<{ osc: OscillatorNode; gain: GainNode } | null>(null);
 
-  // Meditation music
+  // Music (MP3 tracks — fade in/out, endless loop)
   const [selectedMusic, setSelectedMusic] = useState<number | null>(null);
   const [musicVolume, setMusicVolume] = useState(30);
-  const musicGainRef = useRef<GainNode | null>(null);
-  const musicInstanceRef = useRef<{ start: () => void; stop: () => void } | null>(null);
+  const musicPlayerRef = useRef(createMusicPlayer());
 
   // Use refs for the timer state to avoid stale closures
   const timeRemainingRef = useRef(0);
@@ -162,35 +161,26 @@ export default function MeditatePage() {
     }
   }, []);
 
-  // Music controls
+  // Music controls (MP3 with fade in/out and endless loop)
   function startMusic() {
     if (selectedMusic === null) return;
-    stopMusic();
-    const ctx = getOrCreateAudioCtx();
-    if (!musicGainRef.current) {
-      musicGainRef.current = ctx.createGain();
-      musicGainRef.current.connect(ctx.destination);
-    }
-    musicGainRef.current.gain.value = musicVolume / 100;
-    const music = MEDITATION_MUSIC[selectedMusic];
-    const instance = music.create(ctx, musicGainRef.current);
-    instance.start();
-    musicInstanceRef.current = instance;
+    musicPlayerRef.current.play(MUSIC_TRACKS[selectedMusic].file, musicVolume / 100);
   }
 
   function stopMusic() {
-    if (musicInstanceRef.current) {
-      musicInstanceRef.current.stop();
-      musicInstanceRef.current = null;
-    }
+    musicPlayerRef.current.stop();
   }
 
   // Update music volume in real-time
   useEffect(() => {
-    if (musicGainRef.current) {
-      musicGainRef.current.gain.value = musicVolume / 100;
-    }
+    musicPlayerRef.current.setVolume(musicVolume / 100);
   }, [musicVolume]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    const player = musicPlayerRef.current;
+    return () => player.destroy();
+  }, []);
 
   // Countdown
   useEffect(() => {
@@ -448,7 +438,7 @@ export default function MeditatePage() {
                   >
                     None
                   </button>
-                  {MEDITATION_MUSIC.map((m, i) => (
+                  {MUSIC_TRACKS.map((m, i) => (
                     <button key={m.name} onClick={() => setSelectedMusic(i)}
                       className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
                         selectedMusic === i ? "bg-white/20 text-white ring-1 ring-white/30" : "bg-white/5 text-gray-400 hover:bg-white/10"
